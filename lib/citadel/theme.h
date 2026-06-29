@@ -6,7 +6,7 @@
 #include <glyph_theme.h>   /* THEME_* semantic tokens (single source of truth) */
 
 /* Top bar — colors come from glyph/glyph_theme.h. */
-#define TOPBAR_HEIGHT   28
+#define TOPBAR_HEIGHT   20
 #define TOPBAR_BG       THEME_BG
 #define TOPBAR_TEXT     THEME_TEXT_DIM
 #define AEGIS_AREA_W    80
