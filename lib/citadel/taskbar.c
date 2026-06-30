@@ -1,7 +1,7 @@
 /* taskbar.c -- Top bar and context menu for Lumen compositor
  *
  * This file replaces the old bottom taskbar with a macOS-style top bar.
- * The "AspisOS" text on the left side is clickable and opens a context menu.
+ * The "LoricaOS" text on the left side is clickable and opens a context menu.
  * The right side carries a volume slider and the clock.
  */
 #include <glyph.h>   /* pulls glyph/theme.h tokens — must precede citadel theme.h */
@@ -96,15 +96,15 @@ topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
     /* Subtle bottom border for definition */
     draw_blend_rect(s, 0, TOPBAR_HEIGHT - 1, screen_w, 1, 0x00FFFFFF, 20);
 
-    /* Brand icon on the far left, then the "AspisOS" menu label. */
+    /* Brand icon on the far left, then the "LoricaOS" menu label. */
     draw_blit_alpha_scaled(s, 6, (TOPBAR_HEIGHT - MENU_ICON_H) / 2,
                            MENU_ICON_W, MENU_ICON_H,
                            (uint32_t *)s_menu_icon, MENU_ICON_W, MENU_ICON_H);
     if (g_font_ui) {
         int ty = (TOPBAR_HEIGHT - font_height(g_font_ui, 14)) / 2;
-        font_draw_text(s, g_font_ui, 14, 28, ty, "AspisOS", 0x00FFFFFF);
+        font_draw_text(s, g_font_ui, 14, 28, ty, "LoricaOS", 0x00FFFFFF);
     } else {
-        draw_text_t(s, 28, 4, "AspisOS", 0x00FFFFFF);
+        draw_text_t(s, 28, 4, "LoricaOS", 0x00FFFFFF);
     }
 
     draw_clock(s, screen_w, clock_str);

@@ -17,7 +17,7 @@ it is called out as such.
    draw ─ theme ─ font ─ window ─ lumen_client ─ glyph_term ─ apps ─ icons ─ image_load
                  │
                  ▼
-        surface_t (software framebuffer) + AspisOS/musl syscalls
+        surface_t (software framebuffer) + LoricaOS/musl syscalls
 ```
 
 libglyph is self-contained. libcitadel builds on libglyph (its taskbar draws

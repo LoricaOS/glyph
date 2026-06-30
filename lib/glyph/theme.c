@@ -35,7 +35,7 @@ glyph_theme_t g_glyph_theme = {
 };
 
 /* Wallpaper presets (rendered procedurally by the compositor). */
-static const char *s_walls[] = { "AspisOS", "Midnight", "Slate", "Accent" };
+static const char *s_walls[] = { "LoricaOS", "Midnight", "Slate", "Accent" };
 static const int   s_nwalls = (int)(sizeof(s_walls) / sizeof(s_walls[0]));
 
 /* Set the 13 palette fields from the theme mode. */

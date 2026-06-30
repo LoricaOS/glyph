@@ -1,9 +1,9 @@
-# glyph — the AspisOS GUI toolkit.
+# glyph — the LoricaOS GUI toolkit.
 #
 # Builds the four static libraries the desktop components link against, and
 # bundles them with their headers into a versioned ARTIFACT (`make artifact`)
 # that component repos (lumen, bastion, the apps, ...) fetch at build time —
-# the same model AspisOS uses to consume the kernel (a built library closure,
+# the same model LoricaOS uses to consume the kernel (a built library closure,
 # not source). The libs are static, so they are a BUILD-time dependency only;
 # nothing here is a runtime herald package.
 #
