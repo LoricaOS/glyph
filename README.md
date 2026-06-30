@@ -1,11 +1,11 @@
 # glyph
 
-The GUI toolkit for [AspisOS](https://github.com/AspisOS/AspisOS) — a
+The GUI toolkit for [LoricaOS](https://github.com/LoricaOS/LoricaOS) — a
 capability-based, no-ambient-authority x86-64 operating system built on the
-from-scratch [Aegis](https://github.com/AspisOS/Aegis) kernel.
+from-scratch [Aegis](https://github.com/LoricaOS/Aegis) kernel.
 
 glyph is a set of four C static libraries that the graphical components of
-AspisOS link against: the **lumen** compositor, the display/login manager, and
+LoricaOS link against: the **lumen** compositor, the display/login manager, and
 the GUI applications. It provides software-framebuffer drawing primitives, a
 runtime theme system, TTF and bitmap text, image decoding, the client side of
 the lumen window protocol, a reusable terminal-emulator core, application-bundle
@@ -19,15 +19,15 @@ publishes a **versioned artifact** (`dist/glyph-<version>.tar.gz`, containing th
 four archives plus their flattened headers) that consumer repositories fetch at
 build time rather than rebuilding from source.
 
-## Where it fits in AspisOS
+## Where it fits in LoricaOS
 
-AspisOS is decomposed into independent repositories:
+LoricaOS is decomposed into independent repositories:
 
-- **`AspisOS/Aegis`** — the kernel. Published as a versioned `aegis.elf`
+- **`LoricaOS/Aegis`** — the kernel. Published as a versioned `aegis.elf`
   artifact; the OS fetches it rather than rebuilding it.
-- **`AspisOS/AspisOS`** — the OS: userland, rootfs, ISO assembly.
-- **`AspisOS/glyph`** — this repository: the shared GUI toolkit.
-- **`AspisOS/lumen`** and the other graphical component repos — the compositor,
+- **`LoricaOS/LoricaOS`** — the OS: userland, rootfs, ISO assembly.
+- **`LoricaOS/glyph`** — this repository: the shared GUI toolkit.
+- **`LoricaOS/lumen`** and the other graphical component repos — the compositor,
   display manager and apps. Each fetches the glyph artifact and links the static
   libraries into its binary.
 
@@ -141,7 +141,7 @@ lib/
 
 ## Building
 
-glyph builds with a **musl cross-compiler** targeting AspisOS userspace. Point
+glyph builds with a **musl cross-compiler** targeting LoricaOS userspace. Point
 `MUSL_CC` at it (defaults to `musl-gcc` on `PATH`).
 
 ```sh
@@ -173,7 +173,7 @@ fetch-glyph.sh <version> <dest-dir>
 ```
 
 It resolves a local cache (`vendor/glyph-<version>.tar.gz`) first, otherwise
-downloads `https://github.com/AspisOS/glyph/releases/download/v<version>/glyph-<version>.tar.gz`,
+downloads `https://github.com/LoricaOS/glyph/releases/download/v<version>/glyph-<version>.tar.gz`,
 then unpacks `include/` and `lib/` into `<dest-dir>`. Place the tarball at
 `vendor/glyph-<version>.tar.gz` to build offline.
 

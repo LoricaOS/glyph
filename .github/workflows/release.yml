@@ -2,7 +2,7 @@ name: build artifact
 
 # Builds the glyph toolkit artifact (static libs + headers) and attaches
 # dist/glyph-<version>.tar.gz to the GitHub release — the versioned artifact the
-# component repos fetch at build time. Reproduces the AspisOS toolchain exactly:
+# component repos fetch at build time. Reproduces the LoricaOS toolchain exactly:
 # stock musl 1.2.5 + the one DNS-resolver patch.
 on:
   push:

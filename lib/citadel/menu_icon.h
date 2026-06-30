@@ -1,4 +1,4 @@
-/* menu_icon.h - 16x16 AspisOS brand icon for the top-bar menu (0xAARRGGBB). */
+/* menu_icon.h - 16x16 LoricaOS brand icon for the top-bar menu (0xAARRGGBB). */
 #ifndef CITADEL_MENU_ICON_H
 #define CITADEL_MENU_ICON_H
 #include <stdint.h>
