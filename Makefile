@@ -27,10 +27,16 @@ AUTH_OBJS    = lib/libauth/auth.o
 
 LIBS = libglyph.a libcitadel.a libaudio.a libauth.a
 
+OBJS = $(GLYPH_OBJS) $(CITADEL_OBJS) $(AUDIO_OBJS) $(AUTH_OBJS)
+
 all: $(LIBS)
 
+# -MMD -MP emits a per-object .d file listing every header the object includes,
+# so editing a header (e.g. adding a field to glyph_window in glyph.h)
+# recompiles exactly the objects that need it — no more stale .o linked into a
+# fresh archive. The .d files are pulled in below.
 %.o: %.c
-	$(MUSL_CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+	$(MUSL_CC) $(CFLAGS) $(INCLUDES) -MMD -MP -c -o $@ $<
 
 libglyph.a:   $(GLYPH_OBJS);   $(AR) rcs $@ $^
 libcitadel.a: $(CITADEL_OBJS); $(AR) rcs $@ $^
@@ -41,5 +47,7 @@ artifact: all
 	sh tools/make-artifact.sh
 
 clean:
-	rm -f $(LIBS) lib/*/*.o
+	rm -f $(LIBS) lib/*/*.o lib/*/*.d
 	rm -rf dist
+
+-include $(OBJS:.o=.d)
