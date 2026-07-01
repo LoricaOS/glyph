@@ -25,6 +25,9 @@ glyph_theme_t g_glyph_theme = {
     .accent = 0x004A90E8u, .accent_hover = 0x005E9FF0u, .accent_active = 0x003A7BCCu,
     .animations = 1, .clock_24h = 1, .natural_scroll = 0, .tz_offset_min = 0,
     .light = 0, .pointer_speed = 150, .wallpaper = 0, .night_light = 0, .ntp_auto = 1,
+    /* terminal: Lorica scheme, 16px, block cursor, blinking, 500-line history */
+    .term_scheme = 0, .term_font_px = 16, .term_cursor = 0, .term_blink = 1,
+    .term_scrollback = 500,
     /* dark palette */
     .bg = 0x000E1118u, .surface = 0x001B2230u, .surface_2 = 0x00232C3Cu,
     .hover = 0x002E3A4Eu, .input_bg = 0x00141A24u,
@@ -150,6 +153,16 @@ int  glyph_theme_night_light(void)       { return g_glyph_theme.night_light; }
 void glyph_theme_set_night_light(int on) { g_glyph_theme.night_light = on ? 1 : 0; }
 int  glyph_theme_ntp_auto(void)          { return g_glyph_theme.ntp_auto; }
 void glyph_theme_set_ntp_auto(int on)    { g_glyph_theme.ntp_auto = on ? 1 : 0; }
+int  glyph_theme_term_scheme(void)       { return g_glyph_theme.term_scheme; }
+void glyph_theme_set_term_scheme(int i)  { if (i >= 0) g_glyph_theme.term_scheme = i; }
+int  glyph_theme_term_font_px(void)      { return g_glyph_theme.term_font_px; }
+void glyph_theme_set_term_font_px(int px){ if (px >= 8 && px <= 40) g_glyph_theme.term_font_px = px; }
+int  glyph_theme_term_cursor(void)       { return g_glyph_theme.term_cursor; }
+void glyph_theme_set_term_cursor(int s)  { if (s >= 0 && s <= 2) g_glyph_theme.term_cursor = s; }
+int  glyph_theme_term_blink(void)        { return g_glyph_theme.term_blink; }
+void glyph_theme_set_term_blink(int on)  { g_glyph_theme.term_blink = on ? 1 : 0; }
+int  glyph_theme_term_scrollback(void)   { return g_glyph_theme.term_scrollback; }
+void glyph_theme_set_term_scrollback(int l) { if (l >= 100 && l <= 100000) g_glyph_theme.term_scrollback = l; }
 
 /* Find `key` at the start of any line in buf; return the value pointer (just
  * past key) or NULL. Line-anchored so "light=" won't match in "night_light=". */
@@ -210,6 +223,11 @@ apply_prefs(const char *buf)
     parse_int_key (buf, "wallpaper=",      &g_glyph_theme.wallpaper);
     parse_bool_key(buf, "night_light=",    &g_glyph_theme.night_light);
     parse_bool_key(buf, "ntp=",            &g_glyph_theme.ntp_auto);
+    parse_int_key (buf, "term_scheme=",    &g_glyph_theme.term_scheme);
+    parse_int_key (buf, "term_font=",      &g_glyph_theme.term_font_px);
+    parse_int_key (buf, "term_cursor=",    &g_glyph_theme.term_cursor);
+    parse_bool_key(buf, "term_blink=",     &g_glyph_theme.term_blink);
+    parse_int_key (buf, "term_scrollback=",&g_glyph_theme.term_scrollback);
     apply_palette(g_glyph_theme.light);    /* keep palette in sync with mode */
 }
 
@@ -225,7 +243,7 @@ glyph_theme_reload_prefs(void)
         int fd = open(paths[i], O_RDONLY);
         if (fd < 0)
             continue;
-        char buf[256];
+        char buf[512];
         ssize_t n = read(fd, buf, sizeof(buf) - 1);
         close(fd);
         if (n <= 0)
@@ -252,7 +270,7 @@ load_config_file(const char *path)
     int fd = open(path, O_RDONLY);
     if (fd < 0)
         return 0;
-    char buf[256];
+    char buf[512];
     ssize_t n = read(fd, buf, sizeof(buf) - 1);
     close(fd);
     if (n <= 0)
@@ -328,11 +346,13 @@ glyph_theme_save(void)
     int idx = glyph_theme_current_accent();
     if (idx < 0)
         idx = 0;
-    char line[320];
+    char line[512];
     int len = snprintf(line, sizeof(line),
                        "accent=%s\nanimations=%s\nclock24=%s\n"
                        "natural_scroll=%s\ntz_offset=%d\nlight=%s\n"
-                       "pointer_speed=%d\nwallpaper=%d\nnight_light=%s\nntp=%s\n",
+                       "pointer_speed=%d\nwallpaper=%d\nnight_light=%s\nntp=%s\n"
+                       "term_scheme=%d\nterm_font=%d\nterm_cursor=%d\n"
+                       "term_blink=%s\nterm_scrollback=%d\n",
                        s_accents[idx].name,
                        g_glyph_theme.animations ? "on" : "off",
                        g_glyph_theme.clock_24h ? "on" : "off",
@@ -342,7 +362,12 @@ glyph_theme_save(void)
                        g_glyph_theme.pointer_speed,
                        g_glyph_theme.wallpaper,
                        g_glyph_theme.night_light ? "on" : "off",
-                       g_glyph_theme.ntp_auto ? "on" : "off");
+                       g_glyph_theme.ntp_auto ? "on" : "off",
+                       g_glyph_theme.term_scheme,
+                       g_glyph_theme.term_font_px,
+                       g_glyph_theme.term_cursor,
+                       g_glyph_theme.term_blink ? "on" : "off",
+                       g_glyph_theme.term_scrollback);
     ssize_t w = write(fd, line, (size_t)len);
     close(fd);
     return w == len;

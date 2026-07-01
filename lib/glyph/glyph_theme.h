@@ -49,6 +49,13 @@ typedef struct glyph_theme {
     int      night_light;     /* 1 = warm color cast on the output     */
     int      ntp_auto;        /* 1 = chronos may sync time (NTP)        */
 
+    /* Terminal preferences (consumed by lumen-terminal via glyph_term). */
+    int      term_scheme;     /* color scheme index (glyph_term built-ins) */
+    int      term_font_px;    /* cell font size in px (13/16/20)           */
+    int      term_cursor;     /* GLYPH_TERM_CURSOR_* (0 block/1 beam/2 ul) */
+    int      term_blink;      /* 1 = blinking cursor                       */
+    int      term_scrollback; /* history lines                             */
+
     /* Palette — derived from `light` (set by theme.c, never edited directly). */
     uint32_t bg, surface, surface_2, hover, input_bg;
     uint32_t desktop_top, desktop_bot;
@@ -118,6 +125,17 @@ int         glyph_theme_night_light(void);         /* 1 = warm cast            *
 void        glyph_theme_set_night_light(int on);
 int         glyph_theme_ntp_auto(void);            /* 1 = NTP sync allowed     */
 void        glyph_theme_set_ntp_auto(int on);
+/* Terminal prefs (lumen-terminal reads these live). */
+int         glyph_theme_term_scheme(void);
+void        glyph_theme_set_term_scheme(int idx);
+int         glyph_theme_term_font_px(void);
+void        glyph_theme_set_term_font_px(int px);
+int         glyph_theme_term_cursor(void);
+void        glyph_theme_set_term_cursor(int style);
+int         glyph_theme_term_blink(void);
+void        glyph_theme_set_term_blink(int on);
+int         glyph_theme_term_scrollback(void);
+void        glyph_theme_set_term_scrollback(int lines);
 
 /* Re-read the runtime prefs (not accent) from config + reapply the palette.
  * Lets a running compositor pick up Settings changes without a restart. */
