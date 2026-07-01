@@ -62,6 +62,10 @@ typedef struct {
                                             * LUMEN_EV_RESIZED (rebuild its
                                             * surface). Off = today's fixed
                                             * window, unchanged. */
+#define LUMEN_WIN_FLAG_ONTOP      0x0004u  /* composite this window above all
+                                            * normal windows (never covered by a
+                                            * raised window). Panels get this by
+                                            * default; regular windows opt in. */
 
 typedef struct {
     uint16_t width;

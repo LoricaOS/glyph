@@ -68,6 +68,7 @@ struct glyph_window {
     int resizable;      /* 1 = green maximize button + snap/maximize enabled */
     int maximized;      /* 1 = currently maximized (restore_* holds prior geom) */
     int restore_x, restore_y, restore_cw, restore_ch;  /* pre-maximize geometry */
+    int always_on_top;  /* 1 = composited above normal windows (dock/panels) */
 
     /* Callbacks for compositor integration */
     void (*on_key)(glyph_window_t *self, char key);
