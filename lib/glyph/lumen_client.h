@@ -27,6 +27,9 @@ typedef struct {
         struct { uint32_t new_w, new_h; }                        resized;
         struct { int32_t x, y; uint8_t op; }                     drag;  /* DRAG_OVER */
         struct { int32_t x, y; uint8_t op; char path[256]; }     drop;  /* DROP */
+        /* WINDOW_LIST: items points at a lib-owned lumen_window_info_t[count],
+         * valid until the next lumen_poll/wait_event call. */
+        struct { int count; const void *items; }                 windows;
     };
 } lumen_event_t;
 
@@ -49,6 +52,12 @@ void lumen_window_present(lumen_window_t *win);
  * this the caller must rebuild any cached surface_t (it points at the new
  * backbuf) and repaint. Only meaningful for LUMEN_WIN_FLAG_RESIZABLE windows. */
 int lumen_window_apply_resize(lumen_window_t *win, int new_w, int new_h);
+/* Resize this (panel) window to w×h — client-initiated. Remaps in place like
+ * apply_resize; returns 0 on success. Used by the dock to fit its task area. */
+int lumen_window_resize_self(lumen_window_t *win, int w, int h);
+/* Ask the compositor to restore+raise+focus the window with this global id
+ * (from a LUMEN_EV_WINDOW_LIST entry). */
+void lumen_activate_window(int fd, uint32_t gid);
 int lumen_poll_event(int fd, lumen_event_t *ev);
 int lumen_wait_event(int fd, lumen_event_t *ev, int timeout_ms);
 void lumen_window_destroy(lumen_window_t *win);

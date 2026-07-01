@@ -69,6 +69,8 @@ struct glyph_window {
     int maximized;      /* 1 = currently maximized (restore_* holds prior geom) */
     int restore_x, restore_y, restore_cw, restore_ch;  /* pre-maximize geometry */
     int always_on_top;  /* 1 = composited above normal windows (dock/panels) */
+    int minimized;      /* 1 = hidden to the dock (visible cleared; dock restores) */
+    unsigned gid;       /* global window id (compositor-assigned) for the dock */
 
     /* Callbacks for compositor integration */
     void (*on_key)(glyph_window_t *self, char key);
