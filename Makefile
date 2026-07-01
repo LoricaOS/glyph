@@ -20,7 +20,7 @@ INCLUDES = -Ilib/glyph -Ilib/citadel -Ilib/audio -Ilib/libauth
 
 GLYPH_OBJS   = $(addprefix lib/glyph/,   draw.o theme.o window.o font.o \
                   lumen_client.o glyph_term.o apps.o icons.o image_load.o \
-                  glyph_cursor.o)
+                  glyph_cursor.o layout.o)
 CITADEL_OBJS = lib/citadel/taskbar.o
 AUDIO_OBJS   = lib/audio/audio.o
 AUTH_OBJS    = lib/libauth/auth.o
