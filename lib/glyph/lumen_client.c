@@ -387,6 +387,73 @@ void lumen_window_present(lumen_window_t *win)
     write(win->fd, &dmg, sizeof(dmg));
 }
 
+/* Apply a server-initiated resize (received as LUMEN_EV_RESIZED). Asks the
+ * server for a fresh buffer at new_w×new_h and remaps shared+backbuf in place;
+ * win->w/h/stride are updated. Returns 0 on success, -1 on failure (window
+ * left at its old size). The caller must rebuild its surface_t (it points at
+ * the new backbuf) and repaint.
+ *
+ * ponytail: assumes the RESIZE_BUFFER reply is the next message on the socket
+ * (the server handles it synchronously, like CREATE_WINDOW). True today; if the
+ * server ever interleaves events before the reply, this needs a queue. */
+int lumen_window_apply_resize(lumen_window_t *win, int new_w, int new_h)
+{
+    if (!win || new_w < 1 || new_h < 1) return -1;
+
+    lumen_msg_hdr_t hdr = { LUMEN_OP_RESIZE_BUFFER, sizeof(lumen_resize_buffer_t) };
+    lumen_resize_buffer_t req = { win->id, (uint32_t)new_w, (uint32_t)new_h };
+    if (write(win->fd, &hdr, sizeof(hdr)) != (ssize_t)sizeof(hdr) ||
+        write(win->fd, &req, sizeof(req)) != (ssize_t)sizeof(req)) {
+        lumen_diag("[LUMEN-CLI] resize: write errno=%d\n", errno);
+        return -1;
+    }
+
+    /* Reply: lumen_window_created_t + new memfd via SCM_RIGHTS (create pattern). */
+    lumen_msg_hdr_t rhdr;
+    lumen_window_created_t created;
+    char cmsgbuf[CMSG_SPACE(sizeof(int))];
+    struct iovec iov[2] = {
+        { .iov_base = &rhdr,    .iov_len = sizeof(rhdr)    },
+        { .iov_base = &created, .iov_len = sizeof(created) },
+    };
+    struct msghdr msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.msg_iov = iov; msg.msg_iovlen = 2;
+    msg.msg_control = cmsgbuf; msg.msg_controllen = sizeof(cmsgbuf);
+    if (recvmsg(win->fd, &msg, 0) < 0 || created.status != 0) {
+        lumen_diag("[LUMEN-CLI] resize: recvmsg errno=%d status=%u\n",
+                   errno, created.status);
+        return -1;
+    }
+
+    int memfd = -1;
+    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+    if (cmsg && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS)
+        memcpy(&memfd, CMSG_DATA(cmsg), sizeof(int));
+    if (memfd < 0) { lumen_diag("[LUMEN-CLI] resize: no memfd\n"); return -1; }
+
+    size_t nbufsz = (size_t)created.width * created.height * sizeof(uint32_t);
+    void *nshared = mmap(NULL, nbufsz, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0);
+    if (nshared == MAP_FAILED) { close(memfd); return -1; }
+    void *nback = malloc(nbufsz);
+    if (!nback) { munmap(nshared, nbufsz); close(memfd); return -1; }
+    memset(nback, 0, nbufsz);
+
+    /* Swap in the new buffers; free the old. */
+    munmap(win->shared, (size_t)win->w * win->h * sizeof(uint32_t));
+    close(win->memfd);
+    free(win->backbuf);
+    win->memfd  = memfd;
+    win->shared = nshared;
+    win->backbuf = nback;
+    win->w = (int)created.width;
+    win->h = (int)created.height;
+    win->stride = (int)created.width;
+    win->x = created.x;
+    win->y = created.y;
+    return 0;
+}
+
 int lumen_poll_event(int fd, lumen_event_t *ev)
 {
     struct pollfd pfd = { .fd = fd, .events = POLLIN };

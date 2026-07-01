@@ -117,6 +117,41 @@ glyph_window_create(const char *title, int client_w, int client_h)
     return win;
 }
 
+/* Resize the server-side surface (chrome + client copy) to a new client area.
+ * Reallocs surface.buf; on failure the old buffer is kept and 0 is returned.
+ * Callers update the client's shared buffer separately (proxy path). */
+int
+glyph_window_resize(glyph_window_t *win, int client_w, int client_h)
+{
+    if (!win || client_w < 1 || client_h < 1)
+        return 0;
+
+    int sw = client_w + 2 * BD_W + SH_OFF;
+    int sh = client_h + TB_H + 2 * BD_W + SH_OFF;
+    uint32_t *nb = calloc((unsigned)(sw * sh), sizeof(uint32_t));
+    if (!nb)
+        return 0;
+
+    free(win->surface.buf);
+    win->surface.buf   = nb;
+    win->client_w = client_w;
+    win->client_h = client_h;
+    win->surf_w   = sw;
+    win->surf_h   = sh;
+    win->surface.w     = sw;
+    win->surface.h     = sh;
+    win->surface.pitch = sw;
+
+    /* Invalidate the frosted-glass backdrop cache — footprint changed. */
+    free(win->blur_cache);
+    win->blur_cache = NULL;
+    win->blur_cache_valid = 0;
+
+    win->has_dirty   = 1;
+    win->dirty_rect  = (glyph_rect_t){ 0, 0, sw, sh };
+    return 1;
+}
+
 void
 glyph_window_destroy(glyph_window_t *win)
 {

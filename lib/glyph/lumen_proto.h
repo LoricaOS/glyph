@@ -38,6 +38,10 @@ typedef struct {
 #define LUMEN_OP_INVOKE          6u  /* ask server to run a built-in by name */
 #define LUMEN_OP_DRAG_START      7u  /* begin compositor-brokered drag-and-drop */
 #define LUMEN_OP_SET_ADMIN       8u  /* set per-window admin (red toolbar) flag */
+#define LUMEN_OP_RESIZE_BUFFER   9u  /* client asks for a new-sized shared buffer;
+                                      * reply = lumen_window_created_t + memfd,
+                                      * exactly like CREATE_WINDOW. Sent by the
+                                      * client after it receives LUMEN_EV_RESIZED. */
 
 /* Drag-and-drop operation requested by the SOURCE. The TARGET executes
  * it (the payload is a path, so the receiving app decides how to copy
@@ -52,6 +56,12 @@ typedef struct {
                                             * the reply carries the real fb
                                             * dimensions. Used by the
                                             * Applications launcher. */
+#define LUMEN_WIN_FLAG_RESIZABLE  0x0002u  /* window can be maximized/snapped;
+                                            * the compositor shows the green
+                                            * button and the client must handle
+                                            * LUMEN_EV_RESIZED (rebuild its
+                                            * surface). Off = today's fixed
+                                            * window, unchanged. */
 
 typedef struct {
     uint16_t width;
@@ -92,6 +102,15 @@ typedef struct {
     uint32_t window_id;
     uint32_t admin;
 } lumen_set_admin_t;
+
+/* RESIZE_BUFFER: client's response to LUMEN_EV_RESIZED — asks the server to
+ * allocate a fresh shared buffer at the new client-area size. The server
+ * replies with lumen_window_created_t + the new memfd via SCM_RIGHTS. */
+typedef struct {
+    uint32_t window_id;
+    uint32_t width;
+    uint32_t height;
+} lumen_resize_buffer_t;
 
 /* DRAG_START: sent while the source still holds the left button (the
  * press that began in its content area). The compositor takes over:

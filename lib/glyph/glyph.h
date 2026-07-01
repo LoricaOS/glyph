@@ -65,6 +65,9 @@ struct glyph_window {
     int frosted;        /* 1 = frosted glass compositing (blur+tint, keyed blit) */
     int chromeless;     /* 1 = no titlebar/border — surface IS the client area */
     int admin;          /* 1 = elevated admin session → red titlebar (danger) */
+    int resizable;      /* 1 = green maximize button + snap/maximize enabled */
+    int maximized;      /* 1 = currently maximized (restore_* holds prior geom) */
+    int restore_x, restore_y, restore_cw, restore_ch;  /* pre-maximize geometry */
 
     /* Callbacks for compositor integration */
     void (*on_key)(glyph_window_t *self, char key);
@@ -104,6 +107,7 @@ struct glyph_window {
 };
 
 glyph_window_t *glyph_window_create(const char *title, int client_w, int client_h);
+int glyph_window_resize(glyph_window_t *win, int client_w, int client_h);
 void glyph_window_destroy(glyph_window_t *win);
 void glyph_window_render(glyph_window_t *win);
 void glyph_window_dispatch_mouse(glyph_window_t *win, int btn, int x, int y);

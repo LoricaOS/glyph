@@ -44,6 +44,11 @@ lumen_window_t *lumen_window_create_ex(int fd, const char *title,
                                        int w, int h, unsigned flags);
 lumen_window_t *lumen_panel_create(int fd, int w, int h);
 void lumen_window_present(lumen_window_t *win);
+/* Apply a LUMEN_EV_RESIZED event: fetch a new-sized shared buffer and remap in
+ * place (updates win->w/h/stride/shared/backbuf). Returns 0 on success. After
+ * this the caller must rebuild any cached surface_t (it points at the new
+ * backbuf) and repaint. Only meaningful for LUMEN_WIN_FLAG_RESIZABLE windows. */
+int lumen_window_apply_resize(lumen_window_t *win, int new_w, int new_h);
 int lumen_poll_event(int fd, lumen_event_t *ev);
 int lumen_wait_event(int fd, lumen_event_t *ev, int timeout_ms);
 void lumen_window_destroy(lumen_window_t *win);
