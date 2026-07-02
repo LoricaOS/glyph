@@ -18,22 +18,24 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-/* Live theme state — default accent "blue", animations on, 24-hour clock,
+/* Live theme state — default accent "indigo", animations on, 24-hour clock,
  * traditional scrolling, UTC, dark theme, normal pointer, Aegis wallpaper,
- * night light off, NTP on. Palette fields default to the dark theme. */
+ * night light off, NTP on. Palette fields default to the dark theme
+ * ("obsidian": near-black neutrals with a violet undertone — 1.1.0 facelift;
+ * the old palette was a bluer slate). Keep in sync with apply_palette(). */
 glyph_theme_t g_glyph_theme = {
-    .accent = 0x004A90E8u, .accent_hover = 0x005E9FF0u, .accent_active = 0x003A7BCCu,
+    .accent = 0x006366F1u, .accent_hover = 0x007C7FF5u, .accent_active = 0x004F52D6u,
     .animations = 1, .clock_24h = 1, .natural_scroll = 0, .tz_offset_min = 0,
     .light = 0, .pointer_speed = 150, .wallpaper = 0, .night_light = 0, .ntp_auto = 1,
     /* terminal: Lorica scheme, 16px, block cursor, blinking, 500-line history */
     .term_scheme = 0, .term_font_px = 16, .term_cursor = 0, .term_blink = 1,
     .term_scrollback = 500,
     /* dark palette */
-    .bg = 0x000E1118u, .surface = 0x001B2230u, .surface_2 = 0x00232C3Cu,
-    .hover = 0x002E3A4Eu, .input_bg = 0x00141A24u,
-    .desktop_top = 0x001B2433u, .desktop_bot = 0x000E141Eu,
-    .border = 0x002E3848u, .border_strong = 0x003C4860u,
-    .text = 0x00E8ECF2u, .text_dim = 0x009AA4B6u, .text_faint = 0x005E6A7Eu,
+    .bg = 0x000D0E14u, .surface = 0x00171923u, .surface_2 = 0x001F2230u,
+    .hover = 0x002A2E40u, .input_bg = 0x0011121Au,
+    .desktop_top = 0x001D1C30u, .desktop_bot = 0x000B0B12u,
+    .border = 0x002A2D3Cu, .border_strong = 0x003B3F52u,
+    .text = 0x00ECEDF4u, .text_dim = 0x00A0A5B6u, .text_faint = 0x00626880u,
     .text_on_accent = 0x00FFFFFFu,
 };
 
@@ -60,18 +62,19 @@ apply_palette(int light)
         g_glyph_theme.text_faint     = 0x0095A0B0u;
         g_glyph_theme.text_on_accent = 0x00FFFFFFu;
     } else {
-        g_glyph_theme.bg             = 0x000E1118u;
-        g_glyph_theme.surface        = 0x001B2230u;
-        g_glyph_theme.surface_2      = 0x00232C3Cu;
-        g_glyph_theme.hover          = 0x002E3A4Eu;
-        g_glyph_theme.input_bg       = 0x00141A24u;
-        g_glyph_theme.desktop_top    = 0x001B2433u;
-        g_glyph_theme.desktop_bot    = 0x000E141Eu;
-        g_glyph_theme.border         = 0x002E3848u;
-        g_glyph_theme.border_strong  = 0x003C4860u;
-        g_glyph_theme.text           = 0x00E8ECF2u;
-        g_glyph_theme.text_dim       = 0x009AA4B6u;
-        g_glyph_theme.text_faint     = 0x005E6A7Eu;
+        /* "Obsidian" — near-black neutrals, violet undertone (1.1.0). */
+        g_glyph_theme.bg             = 0x000D0E14u;
+        g_glyph_theme.surface        = 0x00171923u;
+        g_glyph_theme.surface_2      = 0x001F2230u;
+        g_glyph_theme.hover          = 0x002A2E40u;
+        g_glyph_theme.input_bg       = 0x0011121Au;
+        g_glyph_theme.desktop_top    = 0x001D1C30u;
+        g_glyph_theme.desktop_bot    = 0x000B0B12u;
+        g_glyph_theme.border         = 0x002A2D3Cu;
+        g_glyph_theme.border_strong  = 0x003B3F52u;
+        g_glyph_theme.text           = 0x00ECEDF4u;
+        g_glyph_theme.text_dim       = 0x00A0A5B6u;
+        g_glyph_theme.text_faint     = 0x00626880u;
         g_glyph_theme.text_on_accent = 0x00FFFFFFu;
     }
     g_glyph_theme.light = light ? 1 : 0;

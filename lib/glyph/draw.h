@@ -24,6 +24,10 @@ void draw_blit(surface_t *dst, int dx, int dy, const uint32_t *src, int sw, int 
 void draw_line(surface_t *s, int x0, int y0, int x1, int y1, uint32_t color);
 void draw_circle(surface_t *s, int cx, int cy, int r, uint32_t color);
 void draw_circle_filled(surface_t *s, int cx, int cy, int r, uint32_t color);
+/* Traffic-light window button: AA circle + darker rim + engraved symbol
+ * (0 = plain, 1 = close ×, 2 = minimize −, 3 = maximize zoom-triangles). */
+void draw_traffic_light(surface_t *s, int cx, int cy, int r, uint32_t color,
+                        int sym);
 void draw_rounded_rect(surface_t *s, int x, int y, int w, int h, int r, uint32_t color);
 void draw_blit_scaled(surface_t *dst, int dx, int dy, int dw, int dh,
                       const uint32_t *src, int sw, int sh);
