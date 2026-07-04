@@ -308,3 +308,37 @@ pid_t audio_play_file_async(const char *path)
     }
     _exit(0);
 }
+
+/* ── Streaming interface ─────────────────────────────────────────────────── */
+
+#include <sys/syscall.h>
+#define SYS_AUDIO_POSITION 505
+
+int audio_stream_open(void)
+{
+    return open("/dev/audio", O_WRONLY);
+}
+
+int audio_stream_write(int fd, const short *pcm, int frames)
+{
+    if (frames <= 0) return 0;
+    const char *p = (const char *)pcm;
+    size_t want = (size_t)frames * 4;    /* stereo s16 = 4 bytes/frame */
+    size_t done = 0;
+    while (done < want) {
+        ssize_t n = write(fd, p + done, want - done);
+        if (n <= 0) return done ? (int)(done / 4) : -1;
+        done += (size_t)n;               /* /dev/audio applies backpressure */
+    }
+    return frames;
+}
+
+long audio_stream_position_ms(void)
+{
+    return (long)syscall(SYS_AUDIO_POSITION);
+}
+
+void audio_stream_close(int fd)
+{
+    if (fd >= 0) close(fd);
+}

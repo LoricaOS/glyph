@@ -34,4 +34,27 @@ int audio_duration_ms(const char *path);
  * duration — this keeps the caller's UI responsive. */
 pid_t audio_play_file_async(const char *path);
 
+/* ── Streaming interface (for A/V playback: caller decodes/resamples itself) ──
+ *
+ * The file helpers above own the whole decode loop. A video player instead
+ * owns its own decode+resample and just feeds finished PCM, then reads the
+ * play clock to sync video frames. All PCM MUST be 48 kHz / signed-16 /
+ * stereo interleaved (the sink format); resample to it before writing (e.g.
+ * FFmpeg swresample). */
+
+/* Open the PCM sink (/dev/audio, O_WRONLY). Returns the fd or -1. */
+int audio_stream_open(void);
+
+/* Write `frames` stereo-s16 sample-frames (frames*4 bytes). Blocks with
+ * backpressure until the DMA drains room. Returns frames written, or -1. */
+int audio_stream_write(int fd, const short *pcm, int frames);
+
+/* Milliseconds of audio actually played on the current stream — the A/V
+ * master clock (what's being heard, not merely buffered). Resets when a new
+ * stream starts. 0 when idle or without HDA. */
+long audio_stream_position_ms(void);
+
+/* Close the sink (drains the buffered tail). */
+void audio_stream_close(int fd);
+
 #endif /* LIBAUDIO_H */
