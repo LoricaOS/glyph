@@ -12,10 +12,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Volume slider geometry (right side, just left of the clock). */
-#define VOL_TRACK_W 56
-#define VOL_GAP     18      /* gap between the track and the clock */
-#define VOL_ICON_W  16      /* speaker icon + its gap, left of the track */
+/* Speaker icon geometry (right side, just left of the clock). Clicking the
+ * icon opens the vertical volume-slider popup (drawn by the compositor). */
+#define VOL_ICON_W  10      /* speaker body + cone width */
+#define VOL_GAP     16      /* gap between the speaker icon and the clock */
 
 static int
 clock_width(const char *clock_str)
@@ -25,13 +25,25 @@ clock_width(const char *clock_str)
     return (int)strlen(c) * FONT_W;
 }
 
-/* Left x of the volume slider track. Clock is inset BAR_EDGE from the screen
- * edge so it sits inside the floating capsule. */
+/* Left x of the speaker icon: inset VOL_GAP left of the clock, which itself is
+ * inset BAR_EDGE from the screen edge so it sits inside the floating capsule. */
 static int
-vol_track_x(int screen_w, const char *clock_str)
+vol_icon_x(int screen_w, const char *clock_str)
 {
     int clock_x = screen_w - clock_width(clock_str) - BAR_EDGE;
-    return clock_x - VOL_GAP - VOL_TRACK_W;
+    return clock_x - VOL_GAP - VOL_ICON_W;
+}
+
+/* A thin right-facing arc (a speaker "sound wave") of radius r centred at
+ * (cx,cy). Traces the right semicircle pixel-by-pixel via isqrt. */
+static void
+draw_arc_right(surface_t *s, int cx, int cy, int r, uint32_t col)
+{
+    for (int dy = -r + 1; dy <= r - 1; dy++) {
+        int q = r * r - dy * dy, dx = 0;
+        while ((dx + 1) * (dx + 1) <= q) dx++;   /* isqrt(q) */
+        draw_blend_rect(s, cx + dx, cy + dy, 1, 1, col, 210);
+    }
 }
 
 static void
@@ -122,24 +134,28 @@ topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
 
     draw_clock(s, screen_w, clock_str);
 
-    /* Volume widget: a small speaker icon + slider, left of the clock. */
+    /* Volume: a clickable speaker icon (a click opens the vertical slider
+     * popup). The wave arcs reflect the level; 0 draws a muted glyph. */
     if (volume < 0) volume = 0;
     if (volume > 100) volume = 100;
-    int vx = vol_track_x(screen_w, clock_str);
-    int vy = TOPBAR_HEIGHT / 2;
+    int ix = vol_icon_x(screen_w, clock_str);
+    int iy = TOPBAR_HEIGHT / 2;
 
     /* Speaker: a small body rectangle + a cone widening to the right. */
-    int ix = vx - VOL_ICON_W + 2;
-    draw_fill_rect(s, ix, vy - 2, 3, 5, TOPBAR_TEXT);
+    draw_fill_rect(s, ix, iy - 2, 3, 5, TOPBAR_TEXT);
     for (int dx = 0; dx <= 4; dx++)
-        draw_fill_rect(s, ix + 3 + dx, vy - dx, 1, 2 * dx + 1, TOPBAR_TEXT);
+        draw_fill_rect(s, ix + 3 + dx, iy - dx, 1, 2 * dx + 1, TOPBAR_TEXT);
 
-    /* Track (faint), filled portion (accent), knob. */
-    draw_blend_rect(s, vx, vy - 1, VOL_TRACK_W, 3, 0x00FFFFFF, 55);
-    int fillw = VOL_TRACK_W * volume / 100;
-    if (fillw > 0)
-        draw_fill_rect(s, vx, vy - 1, fillw, 3, C_ACCENT);
-    draw_circle_filled(s, vx + fillw, vy, 5, 0x00FFFFFF);
+    if (volume <= 0) {
+        /* Muted: a small × just right of the cone. */
+        for (int t = 0; t < 4; t++) {
+            draw_blend_rect(s, ix + 9 + t, iy - 2 + t, 1, 1, TOPBAR_TEXT, 220);
+            draw_blend_rect(s, ix + 9 + t, iy + 1 - t, 1, 1, TOPBAR_TEXT, 220);
+        }
+    } else {
+        draw_arc_right(s, ix + 3, iy, 5, TOPBAR_TEXT);            /* inner wave */
+        if (volume > 55) draw_arc_right(s, ix + 3, iy, 8, TOPBAR_TEXT); /* outer */
+    }
 }
 
 int
@@ -151,20 +167,15 @@ topbar_hit_aegis(int mx, int my, int screen_w)
 }
 
 int
-topbar_volume_at(int mx, int my, int screen_w, const char *clock_str)
+topbar_volume_icon_x(int screen_w, const char *clock_str)
 {
-    if (my < BAR_MARGIN_TOP || my >= BAR_MARGIN_TOP + BAR_H) return -1;
-    int vx = vol_track_x(screen_w, clock_str);
-    if (mx < vx - 4 || mx > vx + VOL_TRACK_W + 4) return -1;   /* a touch wider */
-    return topbar_volume_from_x(mx, screen_w, clock_str);
+    return vol_icon_x(screen_w, clock_str);
 }
 
 int
-topbar_volume_from_x(int mx, int screen_w, const char *clock_str)
+topbar_volume_icon_hit(int mx, int my, int screen_w, const char *clock_str)
 {
-    int vx = vol_track_x(screen_w, clock_str);
-    int v = (mx - vx) * 100 / VOL_TRACK_W;
-    if (v < 0) v = 0;
-    if (v > 100) v = 100;
-    return v;
+    if (my < BAR_MARGIN_TOP || my >= BAR_MARGIN_TOP + BAR_H) return 0;
+    int ix = vol_icon_x(screen_w, clock_str);
+    return mx >= ix - 4 && mx <= ix + VOL_ICON_W + 6;   /* generous hit box */
 }
