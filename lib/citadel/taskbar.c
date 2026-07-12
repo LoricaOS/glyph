@@ -99,20 +99,24 @@ topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
         if (a <= 0) continue;
         int d = rad - i, q = rad * rad - d * d, ex = 0;
         while ((ex + 1) * (ex + 1) <= q) ex++;   /* isqrt(q) */
+        ex += 1;   /* cover the fill's 1px AA cap fringe (no black crescent) */
         draw_blend_rect(s, bx + rad - ex, by + i, (bw - 2 * rad) + 2 * ex, 1,
                         0x00FFFFFF, a);
     }
 
-    /* Brand icon + "LoricaOS" label at the left end of the capsule. */
-    draw_blit_alpha_scaled(s, bx + BAR_PAD, by + (bh - MENU_ICON_H) / 2,
+    /* Brand icon + "LoricaOS" label at the left end of the capsule. Inset the
+     * icon ~equidistant from the left cap as from the top/bottom (small, so it
+     * doesn't crowd the middle), separate from BAR_PAD (which insets the right). */
+    int brand_x = bx + 10;
+    draw_blit_alpha_scaled(s, brand_x, by + (bh - MENU_ICON_H) / 2,
                            MENU_ICON_W, MENU_ICON_H,
                            (uint32_t *)s_menu_icon, MENU_ICON_W, MENU_ICON_H);
     if (g_font_ui) {
         int ty = by + (bh - font_height(g_font_ui, 14)) / 2;
-        font_draw_text(s, g_font_ui, 14, bx + BAR_PAD + MENU_ICON_W + 6, ty,
+        font_draw_text(s, g_font_ui, 14, brand_x + MENU_ICON_W + 6, ty,
                        "LoricaOS", 0x00FFFFFF);
     } else {
-        draw_text_t(s, bx + BAR_PAD + MENU_ICON_W + 6, by + 6,
+        draw_text_t(s, brand_x + MENU_ICON_W + 6, by + 6,
                     "LoricaOS", 0x00FFFFFF);
     }
 
