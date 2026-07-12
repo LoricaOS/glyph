@@ -280,29 +280,22 @@ void draw_circle_filled(surface_t *s, int cx, int cy, int r, uint32_t color)
 void draw_traffic_light(surface_t *s, int cx, int cy, int r, uint32_t color,
                         int sym)
 {
-    uint32_t rim = ((((color >> 16) & 0xFF) * 3 / 5) << 16) |
-                   ((((color >> 8)  & 0xFF) * 3 / 5) << 8)  |
-                    (((color        & 0xFF) * 3 / 5));
     uint32_t ink = ((((color >> 16) & 0xFF) * 2 / 5) << 16) |
                    ((((color >> 8)  & 0xFF) * 2 / 5) << 8)  |
                     (((color        & 0xFF) * 2 / 5));
-    draw_circle_filled(s, cx, cy, r, color);
-    /* 1px AA rim: re-cover the edge band in the darker tone. */
-    {
-        int in2  = (2 * r - 2) * (2 * r - 2);
-        int mid2 = (2 * r - 1) * (2 * r - 1);
-        int out2 = (2 * r + 1) * (2 * r + 1);
-        for (int dy = -r; dy <= r; dy++)
-            for (int dx = -r; dx <= r; dx++) {
-                int d2 = 4 * (dx * dx + dy * dy);
-                if (d2 <= in2 || d2 >= out2)
-                    continue;
-                int a = d2 <= mid2
-                        ? 255 * (d2 - in2) / (mid2 - in2)
-                        : 255 * (out2 - d2) / (out2 - mid2);
-                blend_px(s, cx + dx, cy + dy, rim, a);
-            }
-    }
+    /* Antialiased filled disc: blend `color` over whatever is behind it with a
+     * 1px coverage ramp at the edge, so the rim is smooth against the titlebar
+     * (no stair-steps). Distances are in half-pixel units (d2 = 4*(dx²+dy²)). */
+    int in2  = (2 * r - 1) * (2 * r - 1);
+    int out2 = (2 * r + 1) * (2 * r + 1);
+    for (int dy = -r - 1; dy <= r + 1; dy++)
+        for (int dx = -r - 1; dx <= r + 1; dx++) {
+            int d2 = 4 * (dx * dx + dy * dy);
+            if (d2 >= out2) continue;
+            int a = (d2 <= in2) ? 255 : 255 * (out2 - d2) / (out2 - in2);
+            blend_px(s, cx + dx, cy + dy, color, a);
+        }
+    /* sym: 0 = plain disc (macOS shows the glyph only on hover). */
     switch (sym) {
     case 1:                                   /* close: × */
         draw_line(s, cx - 3, cy - 3, cx + 3, cy + 3, ink);
