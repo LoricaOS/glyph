@@ -87,8 +87,15 @@ topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
     int bx = BAR_MARGIN_SIDE, by = BAR_MARGIN_TOP;
     int bw = screen_w - 2 * BAR_MARGIN_SIDE, bh = BAR_H;
     int rad = bh / 2;   /* fully rounded ends */
+    /* Base fill + a very slight vertical gradient: a soft top sheen fading to
+     * nothing by mid-height, drawn in the straight middle so it doesn't overrun
+     * the rounded ends. No border — keeps it clean and glassy. */
     draw_blend_rounded_rect(s, bx, by, bw, bh, rad, TOPBAR_BG, 205);
-    draw_rounded_outline(s, bx, by, bw, bh, rad, 1, 0x00343A48);
+    for (int i = 0; i < bh / 2; i++) {
+        int a = 18 * (bh / 2 - i) / (bh / 2);
+        if (a > 0)
+            draw_blend_rect(s, bx + rad, by + i, bw - 2 * rad, 1, 0x00FFFFFF, a);
+    }
 
     /* Brand icon + "LoricaOS" label at the left end of the capsule. */
     draw_blit_alpha_scaled(s, bx + BAR_PAD, by + (bh - MENU_ICON_H) / 2,
