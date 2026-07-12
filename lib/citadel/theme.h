@@ -14,8 +14,8 @@
 #define BAR_MARGIN_TOP  5
 #define BAR_MARGIN_SIDE 10
 #define BAR_H           (TOPBAR_HEIGHT - 2 * BAR_MARGIN_TOP)   /* 24 */
-#define BAR_PAD         12                                     /* content inset */
-#define BAR_EDGE        (BAR_MARGIN_SIDE + BAR_PAD)            /* 22: content inset from screen edge */
+#define BAR_PAD         22                                     /* content inset from the capsule ends */
+#define BAR_EDGE        (BAR_MARGIN_SIDE + BAR_PAD)            /* content inset from screen edge */
 #define TOPBAR_BG       THEME_BG
 #define TOPBAR_TEXT     THEME_TEXT_DIM
 #define AEGIS_AREA_W    120
