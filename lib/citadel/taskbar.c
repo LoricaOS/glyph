@@ -96,6 +96,16 @@ topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
     /* Subtle bottom border for definition */
     draw_blend_rect(s, 0, TOPBAR_HEIGHT - 1, screen_w, 1, 0x00FFFFFF, 20);
 
+    /* Left brand "glass chip": a subtle rounded pill behind the logo + label
+     * (matches the desktop mockup). Drawn on the fresh-per-frame layer, under
+     * the icon/text. A ~7% white lift reads as a raised chip on the dark bar. */
+    {
+        int tw = g_font_ui ? font_text_width(g_font_ui, 14, "LoricaOS")
+                           : (int)strlen("LoricaOS") * FONT_W;
+        draw_blend_rounded_rect(s, 2, 2, 28 + tw + 6, TOPBAR_HEIGHT - 4, 8,
+                                0x00FFFFFF, 18);
+    }
+
     /* Brand icon on the far left, then the "LoricaOS" menu label. */
     draw_blit_alpha_scaled(s, 6, (TOPBAR_HEIGHT - MENU_ICON_H) / 2,
                            MENU_ICON_W, MENU_ICON_H,
@@ -107,6 +117,12 @@ topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
         draw_text_t(s, 28, 4, "LoricaOS", 0x00FFFFFF);
     }
 
+    /* Clock "glass chip" on the right, matching the brand chip. */
+    {
+        int cw = clock_width(clock_str);
+        draw_blend_rounded_rect(s, screen_w - cw - 12 - 7, 2, cw + 14,
+                                TOPBAR_HEIGHT - 4, 8, 0x00FFFFFF, 18);
+    }
     draw_clock(s, screen_w, clock_str);
 
     /* Volume widget: a small speaker icon + slider, left of the clock. */
