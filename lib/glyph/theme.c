@@ -37,6 +37,7 @@ glyph_theme_t g_glyph_theme = {
     .border = 0x002A2D3Cu, .border_strong = 0x003B3F52u,
     .text = 0x00ECEDF4u, .text_dim = 0x00A0A5B6u, .text_faint = 0x00626880u,
     .text_on_accent = 0x00FFFFFFu,
+    .ok = 0x0030C85Au, .warn = 0x00E8B23Eu, .error = 0x00FF5F57u,
 };
 
 /* Wallpaper presets (rendered procedurally by the compositor). */
@@ -61,6 +62,10 @@ apply_palette(int light)
         g_glyph_theme.text_dim       = 0x00586678u;
         g_glyph_theme.text_faint     = 0x0095A0B0u;
         g_glyph_theme.text_on_accent = 0x00FFFFFFu;
+        /* Deeper status hues for AA contrast on the light surfaces. */
+        g_glyph_theme.ok             = 0x001E8E3Eu;
+        g_glyph_theme.warn           = 0x00B06000u;
+        g_glyph_theme.error          = 0x00C5221Fu;
     } else {
         /* "Obsidian" — near-black neutrals, violet undertone (1.1.0). */
         g_glyph_theme.bg             = 0x000D0E14u;
@@ -76,6 +81,10 @@ apply_palette(int light)
         g_glyph_theme.text_dim       = 0x00A0A5B6u;
         g_glyph_theme.text_faint     = 0x00626880u;
         g_glyph_theme.text_on_accent = 0x00FFFFFFu;
+        /* Dark-tuned status hues (the prior fixed values). */
+        g_glyph_theme.ok             = 0x0030C85Au;
+        g_glyph_theme.warn           = 0x00E8B23Eu;
+        g_glyph_theme.error          = 0x00FF5F57u;
     }
     g_glyph_theme.light = light ? 1 : 0;
 }

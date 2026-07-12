@@ -408,6 +408,137 @@ void draw_text_center(surface_t *s, int x, int y, int w, const char *str,
     draw_text(s, x + offset, y, str, fg, bg);
 }
 
+const char *glyph_text_elide(const char *src, int max_w, char *out, int outsz)
+{
+    if (!out || outsz <= 0) return out;
+    if (!src) { out[0] = '\0'; return out; }
+
+    /* Fits already: straight bounded copy. */
+    if (glyph_text_width(src) <= max_w) {
+        int i = 0;
+        while (src[i] && i < outsz - 1) { out[i] = src[i]; i++; }
+        out[i] = '\0';
+        return out;
+    }
+
+    /* Grow a prefix one UTF-8 character at a time, keeping the longest whose
+     * "prefix…" still fits. O(n^2) in glyph_text_width, but UI strings are short.
+     * The 3-byte ellipsis + NUL must always fit in `out` (hence outsz - 4). */
+    static const char ELL[3] = { (char)0xE2, (char)0x80, (char)0xA6 };  /* U+2026 … */
+    int best = 0, i = 0;
+    while (src[i] && i < outsz - 4) {
+        unsigned char c = (unsigned char)src[i];
+        int step = 1;
+        if (c >= 0xF0) step = 4; else if (c >= 0xE0) step = 3; else if (c >= 0xC0) step = 2;
+        int j;
+        for (j = 0; j < step && src[i + j]; j++) out[i + j] = src[i + j];
+        int len = i + j;
+        out[len] = ELL[0]; out[len + 1] = ELL[1]; out[len + 2] = ELL[2]; out[len + 3] = '\0';
+        if (glyph_text_width(out) <= max_w) { best = len; i = len; }
+        else break;
+    }
+    out[best] = ELL[0]; out[best + 1] = ELL[1]; out[best + 2] = ELL[2]; out[best + 3] = '\0';
+    return out;
+}
+
+void draw_text_ui_elided(surface_t *s, int x, int y, int max_w,
+                         const char *str, uint32_t fg)
+{
+    char buf[256];   /* UI labels; a string wider than this in px is elided anyway */
+    glyph_text_elide(str, max_w, buf, sizeof(buf));
+    draw_text_ui(s, x, y, buf, fg);
+}
+
+void glyph_focus_ring(surface_t *s, int x, int y, int w, int h, int r)
+{
+    /* Ring just OUTSIDE the control, radius grown to stay concentric. */
+    draw_rounded_outline(s, x - FOCUS_RING_W, y - FOCUS_RING_W,
+                         w + 2 * FOCUS_RING_W, h + 2 * FOCUS_RING_W,
+                         r + FOCUS_RING_W, FOCUS_RING_W, THEME_FOCUS);
+}
+
+void glyph_draw_button(surface_t *s, int x, int y, int w, int h,
+                       const char *label, glyph_widget_state_t state,
+                       int primary, int focused)
+{
+    uint32_t bg, fg;
+    if (state == GLYPH_WS_DISABLED) {
+        bg = THEME_SURFACE;
+        fg = THEME_TEXT_FAINT;
+    } else if (primary) {
+        /* Accent call-to-action; hover/pressed shift the accent shade. */
+        bg = (state == GLYPH_WS_PRESSED) ? THEME_ACCENT_ACTIVE
+           : (state == GLYPH_WS_HOVER || state == GLYPH_WS_SELECTED) ? THEME_ACCENT_HOVER
+           : THEME_ACCENT;
+        fg = THEME_TEXT_ON_ACCENT;
+    } else {
+        /* Neutral surface; hover lifts, pressed sinks, selected fills accent. */
+        bg = (state == GLYPH_WS_PRESSED) ? THEME_SURFACE
+           : (state == GLYPH_WS_HOVER)   ? THEME_HOVER
+           : (state == GLYPH_WS_SELECTED) ? THEME_SELECTION
+           : THEME_SURFACE_2;
+        fg = (state == GLYPH_WS_SELECTED) ? THEME_TEXT_ON_ACCENT : THEME_TEXT;
+    }
+    draw_rounded_rect(s, x, y, w, h, R_SM, bg);
+    int lw = glyph_text_width(label);
+    int lh = glyph_text_height();
+    draw_text_ui(s, x + (w - lw) / 2, y + (h - lh) / 2, label, fg);
+    if (focused)
+        glyph_focus_ring(s, x, y, w, h, R_SM);
+}
+
+void glyph_draw_toggle(surface_t *s, int x, int y, int w, int h,
+                       int on, glyph_widget_state_t state)
+{
+    int disabled = (state == GLYPH_WS_DISABLED);
+    uint32_t track = on ? (disabled ? THEME_SURFACE_2 : THEME_ACCENT)
+                        : (state == GLYPH_WS_HOVER ? THEME_HOVER : THEME_SURFACE_2);
+    draw_rounded_rect(s, x, y, w, h, h / 2, track);
+    if (!on)                          /* subtle edge on the off state */
+        draw_rounded_outline(s, x, y, w, h, h / 2, 1, THEME_BORDER);
+    int kr  = h / 2 - 3;              /* knob radius, inset from the track */
+    int kcy = y + h / 2;
+    int kcx = on ? (x + w - h / 2) : (x + h / 2);
+    uint32_t knob = disabled ? THEME_TEXT_FAINT
+                  : (on ? THEME_TEXT_ON_ACCENT : THEME_TEXT_DIM);
+    draw_circle_filled(s, kcx, kcy, kr, knob);
+}
+
+void glyph_draw_field(surface_t *s, int x, int y, int w, int h,
+                      const char *text, int focused, glyph_widget_state_t state)
+{
+    draw_rounded_rect(s, x, y, w, h, R_SM, THEME_INPUT_BG);
+    if (focused)
+        glyph_focus_ring(s, x, y, w, h, R_SM);
+    else
+        draw_rounded_outline(s, x, y, w, h, R_SM, 1, THEME_BORDER);
+    if (text && text[0]) {
+        char buf[256];
+        glyph_text_elide(text, w - 2 * SP_2, buf, sizeof buf);
+        int th = glyph_text_height();
+        draw_text_ui(s, x + SP_2, y + (h - th) / 2, buf,
+                     state == GLYPH_WS_DISABLED ? THEME_TEXT_FAINT : THEME_TEXT);
+    }
+}
+
+void glyph_draw_list_row(surface_t *s, int x, int y, int w, int h,
+                         const char *label, glyph_widget_state_t state)
+{
+    uint32_t fg = THEME_TEXT;
+    if (state == GLYPH_WS_SELECTED) {
+        draw_fill_rect(s, x, y, w, h, THEME_SELECTION);
+        fg = THEME_TEXT_ON_ACCENT;
+    } else if (state == GLYPH_WS_HOVER) {
+        draw_fill_rect(s, x, y, w, h, THEME_HOVER);
+    } else if (state == GLYPH_WS_DISABLED) {
+        fg = THEME_TEXT_FAINT;
+    }
+    char buf[256];
+    glyph_text_elide(label, w - 2 * SP_3, buf, sizeof buf);
+    int th = glyph_text_height();
+    draw_text_ui(s, x + SP_3, y + (h - th) / 2, buf, fg);
+}
+
 void draw_box_blur(surface_t *s, int x, int y, int w, int h, int radius)
 {
     /* Clamp region to surface bounds */
