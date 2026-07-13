@@ -57,6 +57,24 @@ int lumen_read_full(int fd, void *buf, size_t n)
     return 0;
 }
 
+/* Write exactly n bytes, looping over short writes. AF_UNIX SOCK_STREAM can
+ * accept fewer bytes than requested for a large message (e.g. SET_MENU), so a
+ * single write() would truncate the frame and desync the peer. */
+int lumen_write_full(int fd, const void *buf, size_t n)
+{
+    const uint8_t *p = (const uint8_t *)buf;
+    size_t sent = 0;
+    while (sent < n) {
+        ssize_t w = write(fd, p + sent, n - sent);
+        if (w > 0) { sent += (size_t)w; continue; }
+        if (w == 0) return -1;
+        if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+            continue;
+        return -1;
+    }
+    return 0;
+}
+
 int lumen_connect(void)
 {
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -210,6 +228,13 @@ static int recv_event(int fd, lumen_event_t *ev)
         }
         ev->windows.count = cap;
         ev->windows.items = s_wins;
+        break;
+    }
+    case LUMEN_EV_MENU_INVOKE: {
+        lumen_menu_invoke_t mi;
+        if (lumen_read_full(fd, &mi, sizeof(mi)) != 0) return -1;
+        ev->window_id   = mi.window_id;
+        ev->menu.command = mi.command;
         break;
     }
     default: {
@@ -392,6 +417,53 @@ void lumen_window_set_admin(lumen_window_t *win, int admin)
     }
     if (write(win->fd, &req, sizeof(req)) != (ssize_t)sizeof(req))
         lumen_diag("[LUMEN-CLI] set_admin: write req errno=%d\n", errno);
+}
+
+/* ── App menu bar ───────────────────────────────────────────────────── */
+
+void glyph_menu_reset(lumen_set_menu_t *m, uint32_t window_id)
+{
+    memset(m, 0, sizeof(*m));
+    m->window_id = window_id;
+}
+
+int glyph_menu_add_col(lumen_set_menu_t *m, const char *title)
+{
+    if (m->col_count >= LUMEN_MENU_MAX_COLS) return -1;
+    int c = m->col_count++;
+    strncpy(m->cols[c].title, title, LUMEN_MENU_LABEL_LEN - 1);
+    m->cols[c].item_count = 0;
+    return c;
+}
+
+void glyph_menu_add_item(lumen_set_menu_t *m, int col, const char *label,
+                         uint32_t command)
+{
+    if (col < 0 || col >= (int)m->col_count) return;
+    lumen_menu_col_t *c = &m->cols[col];
+    if (c->item_count >= LUMEN_MENU_MAX_ITEMS) return;
+    lumen_menu_item_t *it = &c->items[c->item_count++];
+    strncpy(it->label, label ? label : "", LUMEN_MENU_LABEL_LEN - 1);
+    it->command = command;
+}
+
+/* A separator is just an item with an empty label. */
+void glyph_menu_add_sep(lumen_set_menu_t *m, int col)
+{
+    glyph_menu_add_item(m, col, "", 0);
+}
+
+void lumen_window_set_menu(lumen_window_t *win, const lumen_set_menu_t *menu)
+{
+    if (!win || !menu) return;
+    lumen_set_menu_t req = *menu;
+    req.window_id = win->id;   /* authoritative — ignore any caller value */
+    lumen_msg_hdr_t hdr = { LUMEN_OP_SET_MENU, sizeof(req) };
+    /* SET_MENU is large (multi-KB) — loop over short writes so the frame isn't
+     * truncated (which would desync the server and drop the connection). */
+    if (lumen_write_full(win->fd, &hdr, sizeof(hdr)) != 0 ||
+        lumen_write_full(win->fd, &req, sizeof(req)) != 0)
+        lumen_diag("[LUMEN-CLI] set_menu: write errno=%d\n", errno);
 }
 
 void lumen_window_present(lumen_window_t *win)

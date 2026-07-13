@@ -30,6 +30,7 @@ typedef struct {
         /* WINDOW_LIST: items points at a lib-owned lumen_window_info_t[count],
          * valid until the next lumen_poll/wait_event call. */
         struct { int count; const void *items; }                 windows;
+        struct { uint32_t command; }                             menu;  /* MENU_INVOKE */
     };
 } lumen_event_t;
 
@@ -37,6 +38,9 @@ typedef struct {
  * (AF_UNIX SOCK_STREAM has no message boundaries). Returns 0 on success, -1 on
  * EOF/error. The framing primitive for external Lumen protocol clients. */
 int lumen_read_full(int fd, void *buf, size_t n);
+/* Write exactly n bytes, looping over short writes (needed for large frames
+ * like SET_MENU that can exceed the socket buffer). Returns 0 / -1. */
+int lumen_write_full(int fd, const void *buf, size_t n);
 int lumen_connect(void);
 /* connect(), retrying on ECONNREFUSED (server starting up): 50×100ms = 5s */
 int lumen_connect_retry(void);
@@ -71,5 +75,17 @@ void lumen_window_set_admin(lumen_window_t *win, int admin);
  * the path payload and executes the operation itself. */
 int lumen_drag_start(lumen_window_t *win, int op,
                      const char *label, const char *path);
+
+/* ── App menu bar ───────────────────────────────────────────────────────
+ * A focused window can publish a top-bar menu (File/Edit/…). Build it with
+ * the helpers, then send it once (after window creation, and again whenever
+ * it changes). The compositor draws the titles in the top bar and delivers
+ * LUMEN_EV_MENU_INVOKE (ev.menu.command) when the user picks an item. */
+void glyph_menu_reset(lumen_set_menu_t *m, uint32_t window_id);
+int  glyph_menu_add_col(lumen_set_menu_t *m, const char *title);  /* → col idx */
+void glyph_menu_add_item(lumen_set_menu_t *m, int col, const char *label,
+                         uint32_t command);
+void glyph_menu_add_sep(lumen_set_menu_t *m, int col);
+void lumen_window_set_menu(lumen_window_t *win, const lumen_set_menu_t *menu);
 
 #endif /* LUMEN_CLIENT_H */

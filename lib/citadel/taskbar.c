@@ -116,21 +116,13 @@ topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
                         0x00FFFFFF, a);
     }
 
-    /* Brand icon + "LoricaOS" label at the left end of the capsule. Inset the
-     * icon ~equidistant from the left cap as from the top/bottom (small, so it
-     * doesn't crowd the middle), separate from BAR_PAD (which insets the right). */
+    /* Brand icon at the left end of the capsule (the "LoricaOS" label is gone —
+     * the space to its right now carries the focused app's menu, drawn by the
+     * compositor). Inset ~equidistant from the left cap as from top/bottom. */
     int brand_x = bx + 10;
     draw_blit_alpha_scaled(s, brand_x, by + (bh - MENU_ICON_H) / 2,
                            MENU_ICON_W, MENU_ICON_H,
                            (uint32_t *)s_menu_icon, MENU_ICON_W, MENU_ICON_H);
-    if (g_font_ui) {
-        int ty = by + (bh - font_height(g_font_ui, 14)) / 2;
-        font_draw_text(s, g_font_ui, 14, brand_x + MENU_ICON_W + 6, ty,
-                       "LoricaOS", 0x00FFFFFF);
-    } else {
-        draw_text_t(s, brand_x + MENU_ICON_W + 6, by + 6,
-                    "LoricaOS", 0x00FFFFFF);
-    }
 
     draw_clock(s, screen_w, clock_str);
 
@@ -158,11 +150,21 @@ topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
     }
 }
 
+/* X where the focused app's menu titles begin — just right of the brand icon.
+ * The compositor draws the menu from here. */
+int
+topbar_appmenu_x(void)
+{
+    return BAR_MARGIN_SIDE + 10 + MENU_ICON_W + 16;
+}
+
 int
 topbar_hit_aegis(int mx, int my, int screen_w)
 {
     (void)screen_w;
-    return mx >= BAR_MARGIN_SIDE && mx < BAR_MARGIN_SIDE + AEGIS_AREA_W &&
+    /* Only the brand icon opens the system menu now; the space to its right
+     * belongs to the app menu. */
+    return mx >= BAR_MARGIN_SIDE && mx < topbar_appmenu_x() - 4 &&
            my >= BAR_MARGIN_TOP && my < BAR_MARGIN_TOP + BAR_H;
 }
 

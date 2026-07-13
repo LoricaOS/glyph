@@ -14,6 +14,9 @@ void topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
 
 int topbar_hit_aegis(int mx, int my, int screen_w);
 
+/* X where the focused app's menu titles begin (right of the brand icon). */
+int topbar_appmenu_x(void);
+
 /* Speaker-icon hit-testing (the icon toggles the compositor's volume popup).
  * _icon_x returns the icon's left x so the popup can be positioned under it. */
 int topbar_volume_icon_x(int screen_w, const char *clock_str);

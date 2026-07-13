@@ -47,6 +47,12 @@ typedef struct {
 #define LUMEN_OP_RESIZE_SELF     11u /* client (panel) → server: resize me to w×h.
                                       * Reply = lumen_window_created_t + memfd. Lets
                                       * the dock grow/shrink to fit its task area. */
+#define LUMEN_OP_SET_MENU        12u /* client → server: register this window's app
+                                      * menu bar (File/Edit/…). Payload =
+                                      * lumen_set_menu_t. The compositor shows it in
+                                      * the top bar while the window is focused and
+                                      * sends LUMEN_EV_MENU_INVOKE when an item is
+                                      * chosen. */
 
 /* Drag-and-drop operation requested by the SOURCE. The TARGET executes
  * it (the payload is a path, so the receiving app decides how to copy
@@ -156,6 +162,32 @@ typedef struct {
     char     path[256];  /* payload: absolute path */
 } lumen_drag_start_t;
 
+/* ── App menu bar (top-bar File/Edit/… for the focused window) ──────── */
+#define LUMEN_MENU_MAX_COLS   8   /* titles: File, Edit, View, … */
+#define LUMEN_MENU_MAX_ITEMS  16  /* items per title */
+#define LUMEN_MENU_LABEL_LEN  28
+
+typedef struct {
+    char     label[LUMEN_MENU_LABEL_LEN]; /* "" (empty) = separator line */
+    uint32_t command;                     /* app-defined; echoed back on invoke */
+} lumen_menu_item_t;
+
+typedef struct {
+    char     title[LUMEN_MENU_LABEL_LEN]; /* column title */
+    uint16_t item_count;
+    uint16_t _pad;
+    lumen_menu_item_t items[LUMEN_MENU_MAX_ITEMS];
+} lumen_menu_col_t;
+
+/* SET_MENU payload: the full menu for one window. Fixed-size so the server's
+ * exact-length opcode check applies. col_count == 0 clears the window's menu. */
+typedef struct {
+    uint32_t window_id;
+    uint16_t col_count;
+    uint16_t _pad;
+    lumen_menu_col_t cols[LUMEN_MENU_MAX_COLS];
+} lumen_set_menu_t;
+
 /* ── Server → client (CREATE_WINDOW reply) ──────────────────────────── */
 /* Sent as framed message (hdr.op=0) via sendmsg with SCM_RIGHTS memfd  */
 
@@ -179,6 +211,8 @@ typedef struct {
 #define LUMEN_EV_DROP          0x17u  /* release: payload delivered here */
 #define LUMEN_EV_WINDOW_LIST   0x18u  /* server → dock: the open-window list
                                        * (body = N × lumen_window_info_t) */
+#define LUMEN_EV_MENU_INVOKE   0x19u  /* server → client: a top-bar app-menu item
+                                       * was chosen (body = lumen_menu_invoke_t) */
 
 /* LUMEN_EV_MOUSE evtype values */
 #define LUMEN_MOUSE_MOVE  0u
@@ -229,6 +263,11 @@ typedef struct {
 typedef struct {
     uint32_t window_id;
 } lumen_drag_leave_t;
+
+typedef struct {
+    uint32_t window_id;
+    uint32_t command;   /* app-defined command id of the chosen menu item */
+} lumen_menu_invoke_t;
 
 typedef struct {
     uint32_t window_id;
