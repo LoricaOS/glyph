@@ -136,10 +136,61 @@ int lumen_connect_retry(void)
     return fd;
 }
 
+/* ── Interleaved-event handling ───────────────────────────────────────────
+ * The server can push an async event (e.g. LUMEN_EV_MENU_STATE, sent to a
+ * shell panel on every focus change) on this same connection at ANY time —
+ * including while we're mid-synchronous-reply-wait for CREATE_WINDOW/
+ * CREATE_PANEL/RESIZE_SELF/RESIZE_BUFFER. Those reply-readers assume "the
+ * next message is the reply" (hdr.op==0); an event arriving first would be
+ * misread as reply data (and, since events carry no SCM_RIGHTS, "no memfd").
+ *
+ * MSG_PEEK is NOT used here — Aegis's socket implementation doesn't honor it
+ * (verified: it silently consumes the peeked bytes anyway, desyncing the
+ * stream). So drain_interleaved_events() genuinely consumes each header via
+ * the ordinary lumen_read_full, decodes+stashes it if it's an event (at most
+ * one — see the note below), and only returns once it has consumed a REAL
+ * reply header (op==0) — which the caller must NOT re-read; it goes on to
+ * recvmsg() just the body+cmsg (a single iovec), not the header again.
+ * lumen_poll_event/lumen_wait_event check the stash before touching the
+ * socket, so a stashed event is never lost, just reordered ahead of
+ * whatever the caller was already waiting to send/receive. */
+static lumen_event_t s_pending_ev;
+static int s_has_pending_ev;
+
+static int recv_event_body(int fd, const lumen_msg_hdr_t *hdr, lumen_event_t *ev);
+
+/* Consumes headers (and, for events, their bodies) until it consumes one
+ * with op==0 — the reply the caller is waiting for. That header is NOT
+ * re-readable; the caller must recvmsg() only the body+cmsg next. */
+static int drain_interleaved_events(int fd)
+{
+    for (;;) {
+        lumen_msg_hdr_t hdr;
+        if (lumen_read_full(fd, &hdr, sizeof(hdr)) != 0) return -1;
+        if (hdr.op == 0) return 0;
+        lumen_event_t ev;
+        if (recv_event_body(fd, &hdr, &ev) != 1) return -1;
+        /* At most one slot: in practice a reply-wait only ever races a
+         * single push (the caller drains the stash on its very next
+         * lumen_poll_event/lumen_wait_event call before issuing another
+         * request), so an overwrite here would mean two events interleaved
+         * before either was drained — not reachable in this client's usage
+         * pattern today. */
+        s_pending_ev = ev;
+        s_has_pending_ev = 1;
+    }
+}
+
 static int recv_event(int fd, lumen_event_t *ev)
 {
     lumen_msg_hdr_t hdr;
     if (lumen_read_full(fd, &hdr, sizeof(hdr)) != 0) return -1;
+    return recv_event_body(fd, &hdr, ev);
+}
+
+static int recv_event_body(int fd, const lumen_msg_hdr_t *hdrp, lumen_event_t *ev)
+{
+    lumen_msg_hdr_t hdr = *hdrp;
 
     memset(ev, 0, sizeof(*ev));
     ev->type = hdr.op;
@@ -266,18 +317,21 @@ static int recv_event(int fd, lumen_event_t *ev)
  * Used by both lumen_window_create() and lumen_panel_create(). */
 static lumen_window_t *recv_created_reply(int fd, const char *what)
 {
-    lumen_msg_hdr_t rhdr;
     lumen_window_created_t created;
 
+    /* Consumes the reply header for us (op==0) — only the body+cmsg are
+     * left to read below. See drain_interleaved_events's header comment. */
+    if (drain_interleaved_events(fd) != 0) {
+        lumen_diag("[LUMEN-CLI] %s: drain_interleaved_events failed\n", what);
+        return NULL;
+    }
+
     char cmsgbuf[CMSG_SPACE(sizeof(int))];
-    struct iovec iov[2] = {
-        { .iov_base = &rhdr,    .iov_len = sizeof(rhdr)    },
-        { .iov_base = &created, .iov_len = sizeof(created) },
-    };
+    struct iovec iov = { .iov_base = &created, .iov_len = sizeof(created) };
     struct msghdr msg;
     memset(&msg, 0, sizeof(msg));
-    msg.msg_iov        = iov;
-    msg.msg_iovlen     = 2;
+    msg.msg_iov        = &iov;
+    msg.msg_iovlen     = 1;
     msg.msg_control    = cmsgbuf;
     msg.msg_controllen = sizeof(cmsgbuf);
 
@@ -515,26 +569,28 @@ void lumen_window_present(lumen_window_t *win)
  * server for a fresh buffer at new_w×new_h and remaps shared+backbuf in place;
  * win->w/h/stride are updated. Returns 0 on success, -1 on failure (window
  * left at its old size). The caller must rebuild its surface_t (it points at
- * the new backbuf) and repaint.
- *
- * ponytail: assumes the RESIZE_BUFFER reply is the next message on the socket
- * (the server handles it synchronously, like CREATE_WINDOW). True today; if the
- * server ever interleaves events before the reply, this needs a queue. */
+ * the new backbuf) and repaint. */
 /* Receive a resize reply (lumen_window_created_t + new memfd via SCM_RIGHTS) and
  * remap win->shared/backbuf in place. Shared by apply_resize (server-initiated)
- * and resize_self (client-initiated) — both send a request, then read this. */
+ * and resize_self (client-initiated) — both send a request, then read this.
+ * drain_interleaved_events() handles the server pushing an async event (e.g.
+ * LUMEN_EV_MENU_STATE) on this same connection before the reply arrives. */
 static int recv_buffer_reply(lumen_window_t *win)
 {
-    lumen_msg_hdr_t rhdr;
     lumen_window_created_t created;
+
+    /* Consumes the reply header for us (op==0) — only the body+cmsg are
+     * left to read below. See drain_interleaved_events's header comment. */
+    if (drain_interleaved_events(win->fd) != 0) {
+        lumen_diag("[LUMEN-CLI] resize: drain_interleaved_events failed\n");
+        return -1;
+    }
+
     char cmsgbuf[CMSG_SPACE(sizeof(int))];
-    struct iovec iov[2] = {
-        { .iov_base = &rhdr,    .iov_len = sizeof(rhdr)    },
-        { .iov_base = &created, .iov_len = sizeof(created) },
-    };
+    struct iovec iov = { .iov_base = &created, .iov_len = sizeof(created) };
     struct msghdr msg;
     memset(&msg, 0, sizeof(msg));
-    msg.msg_iov = iov; msg.msg_iovlen = 2;
+    msg.msg_iov = &iov; msg.msg_iovlen = 1;
     msg.msg_control = cmsgbuf; msg.msg_controllen = sizeof(cmsgbuf);
     if (recvmsg(win->fd, &msg, 0) < 0 || created.status != 0) {
         lumen_diag("[LUMEN-CLI] resize: recvmsg errno=%d status=%u\n",
@@ -606,6 +662,7 @@ void lumen_activate_window(int fd, uint32_t gid)
 
 int lumen_poll_event(int fd, lumen_event_t *ev)
 {
+    if (s_has_pending_ev) { *ev = s_pending_ev; s_has_pending_ev = 0; return 1; }
     struct pollfd pfd = { .fd = fd, .events = POLLIN };
     if (poll(&pfd, 1, 0) <= 0) return 0;
     return recv_event(fd, ev);
@@ -613,6 +670,7 @@ int lumen_poll_event(int fd, lumen_event_t *ev)
 
 int lumen_wait_event(int fd, lumen_event_t *ev, int timeout_ms)
 {
+    if (s_has_pending_ev) { *ev = s_pending_ev; s_has_pending_ev = 0; return 1; }
     struct pollfd pfd = { .fd = fd, .events = POLLIN };
     int r = poll(&pfd, 1, timeout_ms);
     if (r == 0) return 0;

@@ -26,11 +26,13 @@ clock_width(const char *clock_str)
 }
 
 /* Left x of the speaker icon: inset VOL_GAP left of the clock, which itself is
- * inset BAR_EDGE from the screen edge so it sits inside the floating capsule. */
+ * inset BAR_PAD from the capsule's own edge (the surface topbar_draw receives
+ * IS the capsule — screen-to-capsule margin is the caller's window placement,
+ * not drawn here). */
 static int
 vol_icon_x(int screen_w, const char *clock_str)
 {
-    int clock_x = screen_w - clock_width(clock_str) - BAR_EDGE;
+    int clock_x = screen_w - clock_width(clock_str) - BAR_PAD;
     return clock_x - VOL_GAP - VOL_ICON_W;
 }
 
@@ -52,12 +54,12 @@ draw_clock(surface_t *s, int screen_w, const char *clock_str)
     const char *c = (clock_str && clock_str[0]) ? clock_str : "00:00";
     if (g_font_ui) {
         int cw = font_text_width(g_font_ui, 14, c);
-        int cx = screen_w - cw - BAR_EDGE;
-        int ty = BAR_MARGIN_TOP + (BAR_H - font_height(g_font_ui, 14)) / 2;
+        int cx = screen_w - cw - BAR_PAD;
+        int ty = (BAR_H - font_height(g_font_ui, 14)) / 2;
         font_draw_text(s, g_font_ui, 14, cx, ty, c, TOPBAR_TEXT);
     } else {
-        draw_text_t(s, screen_w - (int)strlen(c) * FONT_W - BAR_EDGE,
-                    BAR_MARGIN_TOP + 6, c, TOPBAR_TEXT);
+        draw_text_t(s, screen_w - (int)strlen(c) * FONT_W - BAR_PAD,
+                    6, c, TOPBAR_TEXT);
     }
 }
 
@@ -65,13 +67,15 @@ void
 topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
             int backdrop_dirty)
 {
-    /* Floating rounded capsule top bar, inset from the top + sides with fully
-     * rounded ends. topbar_draw runs (via on_draw_desktop) after the desktop
-     * background is painted and BEFORE any window composites, so cache the clean
-     * desktop band once (on a full redraw) and stamp it back on every other
-     * frame — that gives the translucent capsule a fresh, non-accumulating base
-     * to blend over, and leaves the margins + rounded corners showing the
-     * wallpaper. Process-lifetime static (one top bar). */
+    /* The floating rounded capsule with fully rounded ends. `s`/`screen_w` are
+     * the capsule's OWN surface/width — the screen-to-capsule margin
+     * (BAR_MARGIN_SIDE/TOP) is the caller's window placement, not drawn here
+     * (this lets an external client's window BE exactly the capsule, so a
+     * compositor that tints a client's whole window footprint — see lumen's
+     * frosted-panel rendering — doesn't tint a margin band the capsule never
+     * occupied). Cache the clean backdrop band once (on a full redraw) and
+     * stamp it back on every other frame — a fresh, non-accumulating base to
+     * blend the translucent fill over. Process-lifetime static (one top bar). */
     static uint32_t *bg_cache = NULL;
     static int cache_w = 0;
     static int cache_wp = -1;
@@ -81,23 +85,23 @@ topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
     if (rebuild) {
         if (cache_w != screen_w) {
             free(bg_cache);
-            bg_cache = malloc((size_t)screen_w * TOPBAR_HEIGHT * sizeof(uint32_t));
+            bg_cache = malloc((size_t)screen_w * BAR_H * sizeof(uint32_t));
             cache_w = bg_cache ? screen_w : 0;
         }
         if (bg_cache) {
-            for (int y = 0; y < TOPBAR_HEIGHT; y++)
+            for (int y = 0; y < BAR_H; y++)
                 memcpy(&bg_cache[y * screen_w], &s->buf[y * s->pitch],
                        (size_t)screen_w * sizeof(uint32_t));
             cache_wp = wp;
         }
     } else if (bg_cache) {
-        for (int y = 0; y < TOPBAR_HEIGHT; y++)
+        for (int y = 0; y < BAR_H; y++)
             memcpy(&s->buf[y * s->pitch], &bg_cache[y * screen_w],
                    (size_t)screen_w * sizeof(uint32_t));
     }
 
-    int bx = BAR_MARGIN_SIDE, by = BAR_MARGIN_TOP;
-    int bw = screen_w - 2 * BAR_MARGIN_SIDE, bh = BAR_H;
+    int bx = 0, by = 0;
+    int bw = screen_w, bh = BAR_H;
     int rad = bh / 2;   /* fully rounded ends */
     /* Base fill + a very slight vertical gradient: a soft top sheen fading to
      * nothing by mid-height, drawn in the straight middle so it doesn't overrun
@@ -131,7 +135,7 @@ topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
     if (volume < 0) volume = 0;
     if (volume > 100) volume = 100;
     int ix = vol_icon_x(screen_w, clock_str);
-    int iy = TOPBAR_HEIGHT / 2;
+    int iy = BAR_H / 2;
 
     /* Speaker: a small body rectangle + a cone widening to the right. */
     draw_fill_rect(s, ix, iy - 2, 3, 5, TOPBAR_TEXT);
@@ -155,7 +159,7 @@ topbar_draw(surface_t *s, int screen_w, const char *clock_str, int volume,
 int
 topbar_appmenu_x(void)
 {
-    return BAR_MARGIN_SIDE + 10 + MENU_ICON_W + 16;
+    return 10 + MENU_ICON_W + 16;
 }
 
 int
@@ -163,9 +167,10 @@ topbar_hit_aegis(int mx, int my, int screen_w)
 {
     (void)screen_w;
     /* Only the brand icon opens the system menu now; the space to its right
-     * belongs to the app menu. */
-    return mx >= BAR_MARGIN_SIDE && mx < topbar_appmenu_x() - 4 &&
-           my >= BAR_MARGIN_TOP && my < BAR_MARGIN_TOP + BAR_H;
+     * belongs to the app menu. mx/my are relative to the capsule's own
+     * surface (0,0) — see topbar_draw's header comment. */
+    return mx >= 0 && mx < topbar_appmenu_x() - 4 &&
+           my >= 0 && my < BAR_H;
 }
 
 int
@@ -177,7 +182,7 @@ topbar_volume_icon_x(int screen_w, const char *clock_str)
 int
 topbar_volume_icon_hit(int mx, int my, int screen_w, const char *clock_str)
 {
-    if (my < BAR_MARGIN_TOP || my >= BAR_MARGIN_TOP + BAR_H) return 0;
+    if (my < 0 || my >= BAR_H) return 0;
     int ix = vol_icon_x(screen_w, clock_str);
     return mx >= ix - 4 && mx <= ix + VOL_ICON_W + 6;   /* generous hit box */
 }
