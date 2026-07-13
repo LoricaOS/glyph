@@ -53,6 +53,12 @@ typedef struct {
                                       * the top bar while the window is focused and
                                       * sends LUMEN_EV_MENU_INVOKE when an item is
                                       * chosen. */
+#define LUMEN_OP_INVOKE_FOCUSED_MENU 13u /* shell panel → server: invoke a menu
+                                      * command on whichever window is currently
+                                      * focused (the shell doesn't own that
+                                      * window, so it can't use SET_MENU's
+                                      * per-window invoke path). Payload =
+                                      * lumen_invoke_focused_menu_t. */
 
 /* Drag-and-drop operation requested by the SOURCE. The TARGET executes
  * it (the payload is a path, so the receiving app decides how to copy
@@ -86,11 +92,19 @@ typedef struct {
     char     title[64];  /* null-terminated */
 } lumen_create_window_t;
 
-/* Panel: no chrome, no focus, server positions at bottom-center.
+/* Panel: no chrome, no focus. Server positions it per `anchor`; width/height
+ * are a request (a top-anchored panel is stretched to full screen width by
+ * the server regardless of the requested width — see LUMEN_PANEL_TOP).
  * Reply uses lumen_window_created_t (same as CREATE_WINDOW) + memfd. */
+#define LUMEN_PANEL_BOTTOM 0u  /* chromeless, bottom-center (the dock) */
+#define LUMEN_PANEL_TOP    1u  /* chromeless, full-width strip at y=0 (the
+                                * desktop shell's top bar) */
+
 typedef struct {
     uint16_t width;
     uint16_t height;
+    uint16_t anchor;     /* LUMEN_PANEL_* */
+    uint16_t _pad;
 } lumen_create_panel_t;
 
 typedef struct {
@@ -188,6 +202,14 @@ typedef struct {
     lumen_menu_col_t cols[LUMEN_MENU_MAX_COLS];
 } lumen_set_menu_t;
 
+/* INVOKE_FOCUSED_MENU payload: the shell picked a menu item; the server
+ * targets whichever window is focused at delivery time (not necessarily
+ * addressed by id — the shell only ever saw that window's menu via
+ * LUMEN_EV_MENU_STATE, it doesn't track window lifecycles). */
+typedef struct {
+    uint32_t command;
+} lumen_invoke_focused_menu_t;
+
 /* ── Server → client (CREATE_WINDOW reply) ──────────────────────────── */
 /* Sent as framed message (hdr.op=0) via sendmsg with SCM_RIGHTS memfd  */
 
@@ -213,6 +235,14 @@ typedef struct {
                                        * (body = N × lumen_window_info_t) */
 #define LUMEN_EV_MENU_INVOKE   0x19u  /* server → client: a top-bar app-menu item
                                        * was chosen (body = lumen_menu_invoke_t) */
+#define LUMEN_EV_MENU_STATE    0x1Au  /* server → shell panel: the currently
+                                       * focused window's menu (or col_count=0
+                                       * if it has none/nothing is focused).
+                                       * Sent whenever focus changes. Body =
+                                       * lumen_set_menu_t (window_id = the
+                                       * focused window's id, needed so the
+                                       * shell can echo it back via
+                                       * LUMEN_OP_INVOKE_FOCUSED_MENU). */
 
 /* LUMEN_EV_MOUSE evtype values */
 #define LUMEN_MOUSE_MOVE  0u

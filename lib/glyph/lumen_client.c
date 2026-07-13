@@ -237,6 +237,15 @@ static int recv_event(int fd, lumen_event_t *ev)
         ev->menu.command = mi.command;
         break;
     }
+    case LUMEN_EV_MENU_STATE: {
+        /* Large (multi-KB) fixed frame, same shape as SET_MENU — persists
+         * until the next call, like WINDOW_LIST's s_wins. */
+        static lumen_set_menu_t s_menu_state;
+        if (lumen_read_full(fd, &s_menu_state, sizeof(s_menu_state)) != 0) return -1;
+        ev->window_id      = s_menu_state.window_id;
+        ev->menu_state.menu = &s_menu_state;
+        break;
+    }
     default: {
         char tmp[256];
         uint32_t rem = hdr.len;
@@ -352,9 +361,18 @@ lumen_window_t *lumen_window_create_ex(int fd, const char *title,
 
 lumen_window_t *lumen_panel_create(int fd, int w, int h)
 {
+    return lumen_panel_create_anchored(fd, w, h, LUMEN_PANEL_BOTTOM);
+}
+
+lumen_window_t *lumen_panel_create_anchored(int fd, int w, int h, unsigned anchor)
+{
     lumen_msg_hdr_t hdr = { LUMEN_OP_CREATE_PANEL,
                              sizeof(lumen_create_panel_t) };
-    lumen_create_panel_t req = { (uint16_t)w, (uint16_t)h };
+    lumen_create_panel_t req;
+    memset(&req, 0, sizeof(req));
+    req.width  = (uint16_t)w;
+    req.height = (uint16_t)h;
+    req.anchor = (uint16_t)anchor;
 
     if (write(fd, &hdr, sizeof(hdr)) != (ssize_t)sizeof(hdr)) {
         lumen_diag("[LUMEN-CLI] panel_create: write hdr errno=%d\n", errno);
@@ -384,6 +402,22 @@ int lumen_drag_start(lumen_window_t *win, int op,
     }
     if (write(win->fd, &req, sizeof(req)) != (ssize_t)sizeof(req)) {
         lumen_diag("[LUMEN-CLI] drag_start: write req errno=%d\n", errno);
+        return -EIO;
+    }
+    return 0;
+}
+
+int lumen_invoke_focused_menu(int fd, uint32_t command)
+{
+    lumen_msg_hdr_t hdr = { LUMEN_OP_INVOKE_FOCUSED_MENU,
+                             sizeof(lumen_invoke_focused_menu_t) };
+    lumen_invoke_focused_menu_t req = { command };
+    if (write(fd, &hdr, sizeof(hdr)) != (ssize_t)sizeof(hdr)) {
+        lumen_diag("[LUMEN-CLI] invoke_focused_menu: write hdr errno=%d\n", errno);
+        return -EIO;
+    }
+    if (write(fd, &req, sizeof(req)) != (ssize_t)sizeof(req)) {
+        lumen_diag("[LUMEN-CLI] invoke_focused_menu: write req errno=%d\n", errno);
         return -EIO;
     }
     return 0;

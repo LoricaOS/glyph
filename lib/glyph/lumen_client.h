@@ -31,6 +31,10 @@ typedef struct {
          * valid until the next lumen_poll/wait_event call. */
         struct { int count; const void *items; }                 windows;
         struct { uint32_t command; }                             menu;  /* MENU_INVOKE */
+        /* MENU_STATE: menu points at a lib-owned lumen_set_menu_t (the
+         * focused window's published menu, or col_count==0 if none/nothing
+         * focused), valid until the next lumen_poll/wait_event call. */
+        struct { const lumen_set_menu_t *menu; }                 menu_state;
     };
 } lumen_event_t;
 
@@ -50,6 +54,9 @@ lumen_window_t *lumen_window_create(int fd, const char *title, int w, int h);
 lumen_window_t *lumen_window_create_ex(int fd, const char *title,
                                        int w, int h, unsigned flags);
 lumen_window_t *lumen_panel_create(int fd, int w, int h);
+/* Like lumen_panel_create(), but anchor = LUMEN_PANEL_* (LUMEN_PANEL_TOP for
+ * a full-width top strip — the desktop shell's top bar). */
+lumen_window_t *lumen_panel_create_anchored(int fd, int w, int h, unsigned anchor);
 void lumen_window_present(lumen_window_t *win);
 /* Apply a LUMEN_EV_RESIZED event: fetch a new-sized shared buffer and remap in
  * place (updates win->w/h/stride/shared/backbuf). Returns 0 on success. After
@@ -66,6 +73,9 @@ int lumen_poll_event(int fd, lumen_event_t *ev);
 int lumen_wait_event(int fd, lumen_event_t *ev, int timeout_ms);
 void lumen_window_destroy(lumen_window_t *win);
 int lumen_invoke(int fd, const char *name);
+/* Shell panel only: invoke a menu command on whichever window is currently
+ * focused (see LUMEN_EV_MENU_STATE / LUMEN_OP_INVOKE_FOCUSED_MENU). */
+int lumen_invoke_focused_menu(int fd, uint32_t command);
 /* Tell Lumen this window's shell is (un)elevated to an admin session, so
  * the compositor tints the window titlebar red. admin != 0 = elevated. */
 void lumen_window_set_admin(lumen_window_t *win, int admin);
