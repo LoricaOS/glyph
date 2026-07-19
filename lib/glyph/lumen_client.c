@@ -290,9 +290,23 @@ static int recv_event_body(int fd, const lumen_msg_hdr_t *hdrp, lumen_event_t *e
     }
     case LUMEN_EV_MENU_STATE: {
         /* Large (multi-KB) fixed frame, same shape as SET_MENU — persists
-         * until the next call, like WINDOW_LIST's s_wins. */
+         * until the next call, like WINDOW_LIST's s_wins. Read exactly hdr.len
+         * bytes (draining any excess) — NOT sizeof — so a client/server struct-
+         * size skew can't desync the stream: reading sizeof while the sender
+         * framed hdr.len leaves leftover bytes that mis-frame every later
+         * message (the top-bar-click bug — the shell then read op=0 garbage
+         * forever and never saw the mouse event). */
         static lumen_set_menu_t s_menu_state;
-        if (lumen_read_full(fd, &s_menu_state, sizeof(s_menu_state)) != 0) return -1;
+        memset(&s_menu_state, 0, sizeof(s_menu_state));
+        uint32_t want = hdr.len < sizeof(s_menu_state) ? hdr.len : (uint32_t)sizeof(s_menu_state);
+        if (want && lumen_read_full(fd, &s_menu_state, want) != 0) return -1;
+        uint32_t rem = hdr.len - want;
+        char tmp[256];
+        while (rem > 0) {
+            ssize_t r = read(fd, tmp, rem < (uint32_t)sizeof(tmp) ? rem : (uint32_t)sizeof(tmp));
+            if (r <= 0) return -1;
+            rem -= (uint32_t)r;
+        }
         ev->window_id      = s_menu_state.window_id;
         ev->menu_state.menu = &s_menu_state;
         break;
