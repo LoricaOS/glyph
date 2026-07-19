@@ -154,8 +154,44 @@ int lumen_connect_retry(void)
  * lumen_poll_event/lumen_wait_event check the stash before touching the
  * socket, so a stashed event is never lost, just reordered ahead of
  * whatever the caller was already waiting to send/receive. */
-static lumen_event_t s_pending_ev;
-static int s_has_pending_ev;
+/* Ring of events consumed while waiting for a synchronous reply. This was a
+ * SINGLE slot, on the reasoning that a reply-wait only ever races one push.
+ * That stopped being true once the desktop shell became a client: it calls
+ * lumen_window_resize_self() from inside its own mouse handling (opening a
+ * dropdown resizes the panel), and the pointer keeps moving over the bar for
+ * the whole round-trip — so several MOUSE events land during one wait. With
+ * one slot, all but the last were dropped; losing a button press (or the
+ * release that matches an earlier press) leaves the bar's state machine stuck
+ * and it stops responding to clicks until something else resyncs it.
+ *
+ * Snapshot events (MENU_STATE, WINDOW_LIST) keep their payload in a single
+ * static below, so queued copies of those all point at the newest snapshot —
+ * fine, since each is a complete state, not a delta. */
+#define EV_QUEUE_MAX 32
+static lumen_event_t s_ev_queue[EV_QUEUE_MAX];
+static int s_ev_head, s_ev_tail;
+
+static int ev_queue_empty(void) { return s_ev_head == s_ev_tail; }
+
+static void ev_queue_push(const lumen_event_t *ev)
+{
+    int next = (s_ev_tail + 1) % EV_QUEUE_MAX;
+    if (next == s_ev_head) {
+        /* Full: drop the OLDEST. Newer input is the more useful thing to
+         * keep, and a full queue means the caller is badly behind anyway. */
+        s_ev_head = (s_ev_head + 1) % EV_QUEUE_MAX;
+    }
+    s_ev_queue[s_ev_tail] = *ev;
+    s_ev_tail = next;
+}
+
+static int ev_queue_pop(lumen_event_t *out)
+{
+    if (ev_queue_empty()) return 0;
+    *out = s_ev_queue[s_ev_head];
+    s_ev_head = (s_ev_head + 1) % EV_QUEUE_MAX;
+    return 1;
+}
 
 static int recv_event_body(int fd, const lumen_msg_hdr_t *hdr, lumen_event_t *ev);
 
@@ -176,8 +212,7 @@ static int drain_interleaved_events(int fd)
          * request), so an overwrite here would mean two events interleaved
          * before either was drained — not reachable in this client's usage
          * pattern today. */
-        s_pending_ev = ev;
-        s_has_pending_ev = 1;
+        ev_queue_push(&ev);
     }
 }
 
@@ -185,6 +220,33 @@ static int recv_event(int fd, lumen_event_t *ev)
 {
     lumen_msg_hdr_t hdr;
     if (lumen_read_full(fd, &hdr, sizeof(hdr)) != 0) return -1;
+    /* op==0 is a REPLY. Reaching the event path means either a reply nobody
+     * asked for or, far more likely, a desynced stream (a truncated frame
+     * leaves us reading a body as headers — mostly zeros, so op=0/len=0,
+     * which consumes nothing and spins forever with the UI frozen). Report it
+     * as a lost connection instead: the caller exits and can be restarted,
+     * which is recoverable, whereas a silent 100%-CPU spin is not. */
+    if (hdr.op == 0) {
+        /* A reply where an event was expected: either a stray reply nobody is
+         * waiting for, or we are mid-body of a frame and reading its bytes as
+         * headers. Drain by length and carry on — that resyncs the stray-reply
+         * case. A zero length consumes nothing, so cap consecutive ones rather
+         * than spinning at 100% CPU with the UI frozen (the top-bar hang). */
+        static int zero_run;
+        if (hdr.len == 0) {
+            if (++zero_run > 64) return -1;
+            return 0;
+        }
+        zero_run = 0;
+        char tmp[256];
+        uint32_t rem = hdr.len;
+        while (rem > 0) {
+            ssize_t r = read(fd, tmp, rem < sizeof(tmp) ? rem : sizeof(tmp));
+            if (r <= 0) return -1;
+            rem -= (uint32_t)r;
+        }
+        return 0;
+    }
     return recv_event_body(fd, &hdr, ev);
 }
 
@@ -349,8 +411,22 @@ static lumen_window_t *recv_created_reply(int fd, const char *what)
     msg.msg_control    = cmsgbuf;
     msg.msg_controllen = sizeof(cmsgbuf);
 
-    if (recvmsg(fd, &msg, 0) < 0) {
+    /* recvmsg can return SHORT on a stream socket — it is not obliged to hand
+     * back the whole 24-byte body in one call. Leaving the tail unread put the
+     * next header read in the middle of this reply, and from then on the client
+     * parses body bytes as headers (mostly zeros: op=0/len=0, which consumes
+     * nothing) and spins with its UI frozen. That was the top-bar freeze. Take
+     * the cmsg with the first chunk, then read the rest to completion. */
+    ssize_t got = recvmsg(fd, &msg, 0);
+    if (got < 0) {
         lumen_diag("[LUMEN-CLI] %s: recvmsg errno=%d\n", what, errno);
+        return NULL;
+    }
+    if ((size_t)got < sizeof(created) &&
+        lumen_read_full(fd, (uint8_t *)&created + got,
+                        sizeof(created) - (size_t)got) != 0) {
+        lumen_diag("[LUMEN-CLI] %s: short reply (%zd of %zu)\n",
+                   what, got, sizeof(created));
         return NULL;
     }
     if (created.status != 0) {
@@ -606,9 +682,24 @@ static int recv_buffer_reply(lumen_window_t *win)
     memset(&msg, 0, sizeof(msg));
     msg.msg_iov = &iov; msg.msg_iovlen = 1;
     msg.msg_control = cmsgbuf; msg.msg_controllen = sizeof(cmsgbuf);
-    if (recvmsg(win->fd, &msg, 0) < 0 || created.status != 0) {
-        lumen_diag("[LUMEN-CLI] resize: recvmsg errno=%d status=%u\n",
-                   errno, created.status);
+    /* Short recvmsg: same hazard as recv_created_reply — finish the body or
+     * the stream is desynced for good. This is the hot path (the shell resizes
+     * its panel on every dropdown, while multi-KB menu pushes are in flight),
+     * so it is where the top bar actually froze. */
+    ssize_t got = recvmsg(win->fd, &msg, 0);
+    if (got < 0) {
+        lumen_diag("[LUMEN-CLI] resize: recvmsg errno=%d\n", errno);
+        return -1;
+    }
+    if ((size_t)got < sizeof(created) &&
+        lumen_read_full(win->fd, (uint8_t *)&created + got,
+                        sizeof(created) - (size_t)got) != 0) {
+        lumen_diag("[LUMEN-CLI] resize: short reply (%zd of %zu)\n",
+                   got, sizeof(created));
+        return -1;
+    }
+    if (created.status != 0) {
+        lumen_diag("[LUMEN-CLI] resize: server status=%u\n", created.status);
         return -1;
     }
 
@@ -676,7 +767,7 @@ void lumen_activate_window(int fd, uint32_t gid)
 
 int lumen_poll_event(int fd, lumen_event_t *ev)
 {
-    if (s_has_pending_ev) { *ev = s_pending_ev; s_has_pending_ev = 0; return 1; }
+    if (ev_queue_pop(ev)) return 1;
     struct pollfd pfd = { .fd = fd, .events = POLLIN };
     if (poll(&pfd, 1, 0) <= 0) return 0;
     return recv_event(fd, ev);
@@ -684,7 +775,7 @@ int lumen_poll_event(int fd, lumen_event_t *ev)
 
 int lumen_wait_event(int fd, lumen_event_t *ev, int timeout_ms)
 {
-    if (s_has_pending_ev) { *ev = s_pending_ev; s_has_pending_ev = 0; return 1; }
+    if (ev_queue_pop(ev)) return 1;
     struct pollfd pfd = { .fd = fd, .events = POLLIN };
     int r = poll(&pfd, 1, timeout_ms);
     if (r == 0) return 0;
