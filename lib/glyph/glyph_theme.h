@@ -163,6 +163,10 @@ void        glyph_theme_reload_prefs(void);
 /* ── Compositor color-keys — CONTRACT VALUES, never re-tune ──────────────── */
 #define THEME_KEY_FROST     0x000A0A14  /* frosted-window client key (== C_TERM_BG) */
 #define THEME_KEY_SHADOW    0x00080810  /* chrome transparency key   (== C_SHADOW)  */
+#define THEME_KEY_CLEAR     0x000A0A15  /* panel cut-out key (== C_PANEL_CLEAR):
+                                         * "not part of this panel" — the
+                                         * compositor leaves the desktop as it
+                                         * was, with no frost and no tint. */
 
 /* ── Spacing scale (4px grid) ────────────────────────────────────────────── */
 #define SP_1   4

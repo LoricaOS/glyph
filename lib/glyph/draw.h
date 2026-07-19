@@ -99,6 +99,12 @@ void draw_text_ui_elided(surface_t *s, int x, int y, int max_w,
 #define C_SHADOW    THEME_KEY_SHADOW    /* chrome transparency key — fixed */
 #define C_TERM_FG   THEME_TEXT
 #define C_TERM_BG   THEME_KEY_FROST     /* frosted-window key — fixed      */
+/* Panel cut-out key. A chromeless (panel) window is frosted across its WHOLE
+ * rectangle, so a panel that grows to hold a dropdown would frost the empty
+ * space around it too. Filling that space with C_PANEL_CLEAR tells the
+ * compositor to leave the desktop untouched there. Only meaningful in a
+ * chromeless window. */
+#define C_PANEL_CLEAR THEME_KEY_CLEAR
 /* Widget-specific colors */
 #define C_INPUT_BG  THEME_INPUT_BG      /* text field / list background */
 #define C_INPUT_BD  THEME_BORDER        /* text field / list border */
