@@ -177,8 +177,16 @@ typedef struct {
 } lumen_drag_start_t;
 
 /* ── App menu bar (top-bar File/Edit/… for the focused window) ──────── */
-#define LUMEN_MENU_MAX_COLS   8   /* titles: File, Edit, View, … */
-#define LUMEN_MENU_MAX_ITEMS  16  /* items per title */
+/* These bound a FIXED-SIZE wire frame (lumen_set_menu_t below), which is sent
+ * whole on every menu change no matter how small the actual menu is. Keep the
+ * product small enough that the frame fits comfortably inside one AF_UNIX ring
+ * (UNIX_BUF_SIZE, 4096): a frame LARGER than the ring can never be written in
+ * one go, so the writer spins waiting for space that a busy single-threaded
+ * compositor may not free promptly, and both ends end up stuck mid-frame —
+ * that was the top-bar freeze. At 6x12 the worst case is 2504 bytes; the
+ * richest menu actually shipped is 4 columns of 5 items. */
+#define LUMEN_MENU_MAX_COLS   6   /* titles: File, Edit, View, … */
+#define LUMEN_MENU_MAX_ITEMS  12  /* items per title */
 #define LUMEN_MENU_LABEL_LEN  28
 
 typedef struct {
@@ -194,13 +202,19 @@ typedef struct {
 } lumen_menu_col_t;
 
 /* SET_MENU payload: the full menu for one window. Fixed-size so the server's
- * exact-length opcode check applies. col_count == 0 clears the window's menu. */
+ * exact-length opcode check applies. col_count == 0 clears the window's menu.
+ * MUST stay under UNIX_BUF_SIZE — see the note on the maxima above. */
 typedef struct {
     uint32_t window_id;
     uint16_t col_count;
     uint16_t _pad;
     lumen_menu_col_t cols[LUMEN_MENU_MAX_COLS];
 } lumen_set_menu_t;
+
+/* Fail the build if the menu frame ever outgrows the kernel's AF_UNIX ring
+ * again, rather than shipping a compositor that deadlocks on it. */
+_Static_assert(sizeof(lumen_set_menu_t) < 4096,
+               "lumen_set_menu_t must fit in one AF_UNIX socket ring");
 
 /* INVOKE_FOCUSED_MENU payload: the shell picked a menu item; the server
  * targets whichever window is focused at delivery time (not necessarily
