@@ -31,6 +31,15 @@ OBJS = $(GLYPH_OBJS) $(CITADEL_OBJS) $(AUDIO_OBJS) $(AUTH_OBJS)
 
 all: $(LIBS)
 
+HOST_CC ?= cc
+.PHONY: test
+test:
+	@set -eu; tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT HUP INT TERM; \
+	$(HOST_CC) -O1 -g -Wall -Wextra -fsanitize=address,undefined \
+	    -fno-omit-frame-pointer -Ilib/glyph lib/glyph/text_elide_test.c \
+	    lib/glyph/draw.c lib/glyph/font.c lib/glyph/theme.c -lm -o "$$tmp/test"; \
+	ASAN_OPTIONS=detect_leaks=0 "$$tmp/test" "$(TEST_FONT)"
+
 # -MMD -MP emits a per-object .d file listing every header the object includes,
 # so editing a header (e.g. adding a field to glyph_window in glyph.h)
 # recompiles exactly the objects that need it — no more stale .o linked into a

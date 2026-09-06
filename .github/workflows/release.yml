@@ -47,7 +47,9 @@ jobs:
           chmod +x "$GITHUB_WORKSPACE/musl-toolchain/usr/bin/musl-gcc"
 
       - name: Build the toolkit artifact
-        run: make artifact MUSL_CC="$GITHUB_WORKSPACE/musl-toolchain/usr/bin/musl-gcc"
+        run: |
+          make test
+          make artifact MUSL_CC="$GITHUB_WORKSPACE/musl-toolchain/usr/bin/musl-gcc"
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2

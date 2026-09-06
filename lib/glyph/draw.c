@@ -406,10 +406,11 @@ const char *glyph_text_elide(const char *src, int max_w, char *out, int outsz)
     if (!out || outsz <= 0) return out;
     if (!src) { out[0] = '\0'; return out; }
 
-    /* Fits already: straight bounded copy. */
+    /* Fits in pixels: copy only complete UTF-8 characters within the buffer. */
     if (glyph_text_width(src) <= max_w) {
         int i = 0;
         while (src[i] && i < outsz - 1) { out[i] = src[i]; i++; }
+        while (i > 0 && ((unsigned char)src[i] & 0xC0) == 0x80) i--;
         out[i] = '\0';
         return out;
     }
@@ -417,14 +418,20 @@ const char *glyph_text_elide(const char *src, int max_w, char *out, int outsz)
     /* Grow a prefix one UTF-8 character at a time, keeping the longest whose
      * "prefix…" still fits. O(n^2) in glyph_text_width, but UI strings are short.
      * The 3-byte ellipsis + NUL must always fit in `out` (hence outsz - 4). */
-    static const char ELL[3] = { (char)0xE2, (char)0x80, (char)0xA6 };  /* U+2026 … */
+    static const char ELL[] = "\xe2\x80\xa6";  /* U+2026 … + NUL */
+    if (outsz < (int)sizeof(ELL) || glyph_text_width(ELL) > max_w) {
+        out[0] = '\0';
+        return out;
+    }
     int best = 0, i = 0;
     while (src[i] && i < outsz - 4) {
         unsigned char c = (unsigned char)src[i];
         int step = 1;
         if (c >= 0xF0) step = 4; else if (c >= 0xE0) step = 3; else if (c >= 0xC0) step = 2;
+        if (step > outsz - 4 - i) break;
         int j;
         for (j = 0; j < step && src[i + j]; j++) out[i + j] = src[i + j];
+        if (j != step) break;
         int len = i + j;
         out[len] = ELL[0]; out[len + 1] = ELL[1]; out[len + 2] = ELL[2]; out[len + 3] = '\0';
         if (glyph_text_width(out) <= max_w) { best = len; i = len; }
